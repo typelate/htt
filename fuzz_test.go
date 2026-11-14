@@ -1,9 +1,9 @@
-package template
+package htt
 
 import (
 	"testing"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // FuzzParseText fuzzes the text/template-compatible parser.

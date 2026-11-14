@@ -1,4 +1,4 @@
-package template_test
+package htt_test
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // parseMode selects which parser execCoverage uses for a case. Using a typed
@@ -265,10 +265,10 @@ test:1.1,1.25 5 1`,
 	t.Run("nil *CoverProfile.WriteTo is a no-op", func(t *testing.T) {
 		tree := parseText(t, "test", "{{.}}")
 		var buf bytes.Buffer
-		require.NoError(t, template.ExecuteTemplate(&buf, tree, "ok"))
+		require.NoError(t, htt.ExecuteTemplate(&buf, tree, "ok"))
 		assert.Equal(t, "ok", buf.String())
 
-		var cp *template.CoverProfile
+		var cp *htt.CoverProfile
 		n, err := cp.WriteTo(&buf)
 		require.NoError(t, err, "WriteTo on nil")
 		assert.Equal(t, int64(0), n, "bytes written to WriteTo on nil")
@@ -281,7 +281,7 @@ test:1.1,1.25 5 1`,
 func execCoverage(t *testing.T, tc coverCase) (out, profile string) {
 	t.Helper()
 
-	var tree *template.Tree
+	var tree *htt.Tree
 	switch tc.mode {
 	case parseModeHTML:
 		tree = parseHTML(t, "test", tc.tmpl)
@@ -289,10 +289,10 @@ func execCoverage(t *testing.T, tc coverCase) (out, profile string) {
 		tree = parseText(t, "test", tc.tmpl)
 	}
 
-	var cp template.CoverProfile
+	var cp htt.CoverProfile
 	var outBuf bytes.Buffer
 	require.NoError(t,
-		template.ExecuteTemplate(&outBuf, tree, tc.data, template.WithCoverProfile(&cp)),
+		htt.ExecuteTemplate(&outBuf, tree, tc.data, htt.WithCoverProfile(&cp)),
 		"execute %q", tc.tmpl,
 	)
 
@@ -309,8 +309,8 @@ func TestCoverProfileWriteNewlyCovered(t *testing.T) {
 
 	newlyCovered := func(data any) string {
 		t.Helper()
-		var cp template.CoverProfile
-		require.NoError(t, template.ExecuteTemplate(io.Discard, tree, data, template.WithCoverProfile(&cp)))
+		var cp htt.CoverProfile
+		require.NoError(t, htt.ExecuteTemplate(io.Discard, tree, data, htt.WithCoverProfile(&cp)))
 		var buf bytes.Buffer
 		n, err := cp.WriteNewlyCovered(&buf, written)
 		require.NoError(t, err)
@@ -329,9 +329,9 @@ func TestCoverProfileWriteNewlyCovered(t *testing.T) {
 	})
 
 	t.Run("a failed write marks nothing written", func(t *testing.T) {
-		var cp template.CoverProfile
+		var cp htt.CoverProfile
 		fresh := parseText(t, "other", "x")
-		require.NoError(t, template.ExecuteTemplate(io.Discard, fresh, nil, template.WithCoverProfile(&cp)))
+		require.NoError(t, htt.ExecuteTemplate(io.Discard, fresh, nil, htt.WithCoverProfile(&cp)))
 		_, err := cp.WriteNewlyCovered(failingWriter{}, written)
 		require.Error(t, err)
 		var buf bytes.Buffer
@@ -341,7 +341,7 @@ func TestCoverProfileWriteNewlyCovered(t *testing.T) {
 	})
 
 	t.Run("nil profile writes nothing", func(t *testing.T) {
-		var cp *template.CoverProfile
+		var cp *htt.CoverProfile
 		n, err := cp.WriteNewlyCovered(failingWriter{}, written)
 		require.NoError(t, err)
 		assert.Equal(t, int64(0), n)

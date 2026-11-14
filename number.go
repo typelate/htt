@@ -1,11 +1,11 @@
-package template
+package htt
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // NumberNode holds a number: signed or unsigned integer, float, or complex.

@@ -1,11 +1,11 @@
-package template
+package htt
 
 import (
 	"slices"
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // voidElements is the set of HTML elements that have no closing tag.

@@ -1,4 +1,4 @@
-package template
+package htt
 
 import (
 	"slices"
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // A Node is an element in the parse tree. The interface is trivial.

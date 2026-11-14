@@ -1,4 +1,4 @@
-package template
+package htt
 
 import (
 	"io"
@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // CoverProfile collects coverage information during template execution.

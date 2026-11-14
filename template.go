@@ -1,4 +1,4 @@
-package template
+package htt
 
 import (
 	"cmp"
@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 type Template[Signature any] struct {

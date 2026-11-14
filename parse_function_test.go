@@ -1,4 +1,4 @@
-package template
+package htt
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // TestParseTreeUndefinedFunction checks text/template's parse-time check

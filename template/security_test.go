@@ -1,4 +1,4 @@
-package html_test
+package template_test
 
 import (
 	"bytes"
@@ -7,15 +7,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/html"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+	"github.com/typelate/htt/template"
 )
 
 // render parses tmpl and returns the rendered output.
 func render(t *testing.T, tmpl string, data any) string {
 	t.Helper()
-	tt, err := html.New("test").Parse(tmpl)
+	tt, err := template.New("test").Parse(tmpl)
 	require.NoError(t, err)
 	var buf bytes.Buffer
 	require.NoError(t, tt.Execute(&buf, data))
@@ -30,7 +30,7 @@ func TestTrustHTMLBypassesBodyEscape(t *testing.T) {
 		data any
 		want string
 	}{
-		{"trusted HTML renders raw", html.HTML(`<b>safe</b>`), `<div><b>safe</b></div>`},
+		{"trusted HTML renders raw", template.HTML(`<b>safe</b>`), `<div><b>safe</b></div>`},
 		{"untrusted string escapes", `<b>not safe</b>`, `<div>&lt;b&gt;not safe&lt;/b&gt;</div>`},
 	}
 	for _, tc := range tests {
@@ -47,9 +47,9 @@ func TestTrustURLBypassesSchemeFilter(t *testing.T) {
 		data any
 		want string
 	}{
-		{"trusted javascript URL passes", html.URL(`javascript:onSafeAction()`),
+		{"trusted javascript URL passes", template.URL(`javascript:onSafeAction()`),
 			`<a href="javascript:onSafeAction()">x</a>`},
-		{"trusted custom scheme passes", html.URL(`tel:+15551234`),
+		{"trusted custom scheme passes", template.URL(`tel:+15551234`),
 			`<a href="tel:&#43;15551234">x</a>`},
 		{"untrusted javascript URL filtered", `javascript:alert(1)`,
 			`<a href="#ZgotmplZ">x</a>`},
@@ -65,7 +65,7 @@ func TestTrustURLBypassesSchemeFilter(t *testing.T) {
 }
 
 func TestTrustJSInScriptBody(t *testing.T) {
-	got := render(t, `<script>var x = {{.}};</script>`, html.JS(`makeWidget("hi")`))
+	got := render(t, `<script>var x = {{.}};</script>`, template.JS(`makeWidget("hi")`))
 	assert.Equal(t, `<script>var x = makeWidget("hi");</script>`, got)
 }
 
@@ -75,7 +75,7 @@ func TestTrustJSStrInsideStringLiteral(t *testing.T) {
 		data any
 		want string
 	}{
-		{"trusted JSStr verbatim", html.JSStr(`already-escaped`),
+		{"trusted JSStr verbatim", template.JSStr(`already-escaped`),
 			`<script>var x = "already-escaped";</script>`},
 		{"untrusted string in string-literal context is JS-escaped",
 			`</script>`,
@@ -92,7 +92,7 @@ func TestTrustJSStrInsideStringLiteral(t *testing.T) {
 func TestTrustCSSInStyleBody(t *testing.T) {
 	t.Run("trusted CSS passes through", func(t *testing.T) {
 		got := render(t, `<style>{{.}}</style>`,
-			html.CSS(`body { color: red; }`))
+			template.CSS(`body { color: red; }`))
 		assert.Equal(t, `<style>body { color: red; }</style>`, got)
 	})
 	t.Run("untrusted string cannot inject rules", func(t *testing.T) {
@@ -108,12 +108,12 @@ func TestTrustCSSInStyleBody(t *testing.T) {
 func TestTrustHTMLAttrBypassesContextualEscape(t *testing.T) {
 	t.Run("HTMLAttr in href skips URL filter", func(t *testing.T) {
 		got := render(t, `<a href="{{.}}">x</a>`,
-			html.HTMLAttr(`javascript:trustedCall()`))
+			template.HTMLAttr(`javascript:trustedCall()`))
 		assert.Equal(t, `<a href="javascript:trustedCall()">x</a>`, got)
 	})
 	t.Run("HTMLAttr in onclick skips JS-event escape", func(t *testing.T) {
 		got := render(t, `<button onclick="{{.}}">x</button>`,
-			html.HTMLAttr(`callMe()`))
+			template.HTMLAttr(`callMe()`))
 		assert.Equal(t, `<button onclick="callMe()">x</button>`, got)
 	})
 }
@@ -121,7 +121,7 @@ func TestTrustHTMLAttrBypassesContextualEscape(t *testing.T) {
 func TestTrustSrcsetBypassesPerURLFilter(t *testing.T) {
 	t.Run("trusted srcset passes", func(t *testing.T) {
 		got := render(t, `<img srcset="{{.}}">`,
-			html.Srcset(`javascript:custom() 1x, https://x/y 2x`))
+			template.Srcset(`javascript:custom() 1x, https://x/y 2x`))
 		assert.Equal(t,
 			`<img srcset="javascript:custom() 1x, https://x/y 2x">`, got)
 	})
@@ -164,7 +164,7 @@ func TestCSSContextBlocksRuleBreakout(t *testing.T) {
 // gaps documented on Template.Execute, which is why Execute is not for
 // serving responses.
 func TestDynamicAttributeNameParses(t *testing.T) {
-	_, err := html.New("test").Parse(`<div {{.Name}}="{{.Value}}">x</div>`)
+	_, err := template.New("test").Parse(`<div {{.Name}}="{{.Value}}">x</div>`)
 	require.NoError(t, err)
 }
 
@@ -172,10 +172,10 @@ func TestDynamicAttributeNameParses(t *testing.T) {
 
 func TestAddParseTreeForcesHTMLMode(t *testing.T) {
 	src := `<p>{{.}}</p>`
-	parsed, err := template.ParseTree("plain", "plain", src, nil, lex.Options{})
+	parsed, err := htt.ParseTree("plain", "plain", src, nil, lex.Options{})
 	require.NoError(t, err)
 
-	tmpl := html.New("main")
+	tmpl := template.New("main")
 	_, err = tmpl.AddParseTree("plain", parsed)
 	require.NoError(t, err)
 
@@ -245,12 +245,12 @@ func TestUnchangedDefaultEscaping(t *testing.T) {
 
 func TestTrustNoopInWrongContext(t *testing.T) {
 	t.Run("URL in body is HTML-escaped", func(t *testing.T) {
-		got := render(t, `<p>{{.}}</p>`, html.URL(`<script>`))
+		got := render(t, `<p>{{.}}</p>`, template.URL(`<script>`))
 		assert.Equal(t, `<p>&lt;script&gt;</p>`, got)
 	})
 	t.Run("HTML trust does not bypass URL filter in href", func(t *testing.T) {
 		got := render(t, `<a href="{{.}}">x</a>`,
-			html.HTML(`javascript:alert(1)`))
+			template.HTML(`javascript:alert(1)`))
 		assert.NotContains(t, got, `href="javascript:alert(1)"`,
 			"HTML trust must not bypass URL filter")
 	})

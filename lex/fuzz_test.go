@@ -3,7 +3,7 @@ package lex_test
 import (
 	"testing"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // FuzzScanText fuzzes the text-mode lexer, ensuring no panics on arbitrary input.

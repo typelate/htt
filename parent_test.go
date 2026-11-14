@@ -1,9 +1,9 @@
-package template
+package htt
 
 import (
 	"testing"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 func parseForParent(t *testing.T, src string) *Tree {

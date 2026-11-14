@@ -1,4 +1,4 @@
-package template
+package htt
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // Tree is the representation of a single parsed template.

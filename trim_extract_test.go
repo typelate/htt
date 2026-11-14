@@ -1,4 +1,4 @@
-package template_test
+package htt_test
 
 import (
 	"bytes"
@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // TestExtractedBlockHonorsOwnTrimMarkers is a regression test: a
@@ -30,21 +30,21 @@ func TestExtractedBlockHonorsOwnTrimMarkers(t *testing.T) {
 	const src = `{{block "gimme" . -}}
 <a href="/x">hi</a>
 {{- end}}`
-	treeSet := make(map[string]*template.Tree)
-	tree, err := template.ParseTree("t", "t", src, treeSet, lex.Options{
+	treeSet := make(map[string]*htt.Tree)
+	tree, err := htt.ParseTree("t", "t", src, treeSet, lex.Options{
 		LeftDelim:  "{{",
 		RightDelim: "}}",
 		ParseHTML:  true,
 	})
 	require.NoError(t, err)
-	template.AnnotateHTMLContexts(tree.Root)
+	htt.AnnotateHTMLContexts(tree.Root)
 
 	gimme, ok := treeSet["gimme"]
 	require.True(t, ok, "block %q registered in treeSet", "gimme")
-	template.AnnotateHTMLContexts(gimme.Root)
+	htt.AnnotateHTMLContexts(gimme.Root)
 
 	var buf bytes.Buffer
-	require.NoError(t, template.ExecuteTemplate(&buf, gimme, nil))
+	require.NoError(t, htt.ExecuteTemplate(&buf, gimme, nil))
 	assert.Equal(t, `<a href="/x">hi</a>`, buf.String())
 }
 
@@ -56,24 +56,24 @@ func TestExtractedDefineHonorsOwnTrimMarkers(t *testing.T) {
 	const src = `{{define "gimme" -}}
 <a href="/x">hi</a>
 {{- end}}`
-	tree, err := template.ParseTree("t", "t", src, nil, lex.Options{
+	tree, err := htt.ParseTree("t", "t", src, nil, lex.Options{
 		LeftDelim:  "{{",
 		RightDelim: "}}",
 		ParseHTML:  true,
 	})
 	require.NoError(t, err)
-	template.AnnotateHTMLContexts(tree.Root)
+	htt.AnnotateHTMLContexts(tree.Root)
 
-	var gimme *template.Tree
-	for name, dt := range template.Extract(tree) {
+	var gimme *htt.Tree
+	for name, dt := range htt.Extract(tree) {
 		if name == "gimme" {
 			gimme = dt
 		}
 	}
 	require.NotNil(t, gimme, "define %q extracted", "gimme")
-	template.AnnotateHTMLContexts(gimme.Root)
+	htt.AnnotateHTMLContexts(gimme.Root)
 
 	var buf bytes.Buffer
-	require.NoError(t, template.ExecuteTemplate(&buf, gimme, nil))
+	require.NoError(t, htt.ExecuteTemplate(&buf, gimme, nil))
 	assert.Equal(t, `<a href="/x">hi</a>`, buf.String())
 }

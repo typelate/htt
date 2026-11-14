@@ -1,10 +1,10 @@
-package template_test
+package htt_test
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 func TestPipeNode_HeadCommands(t *testing.T) {
@@ -29,7 +29,7 @@ func TestPipeNode_HeadCommands(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			tree := parseText(t, tt.name, tt.action)
-			action, ok := tree.Root.Nodes[0].(*template.ActionNode)
+			action, ok := tree.Root.Nodes[0].(*htt.ActionNode)
 			if !ok {
 				t.Fatalf("node = %T, want *template.ActionNode", tree.Root.Nodes[0])
 			}
@@ -47,12 +47,12 @@ func TestPipeNode_HeadCommands(t *testing.T) {
 func TestPipeNode_HeadCommands_doesNotAliasInnerCommands(t *testing.T) {
 	const action = `{{(.X | print) | printf "%v"}}`
 	tree := parseText(t, "t", action)
-	pipe := tree.Root.Nodes[0].(*template.ActionNode).Pipe
+	pipe := tree.Root.Nodes[0].(*htt.ActionNode).Pipe
 	head := pipe.HeadCommands()
 	for i := range head {
 		head[i] = nil
 	}
-	inner := pipe.Commands[0].Args[0].(*template.PipeNode)
+	inner := pipe.Commands[0].Args[0].(*htt.PipeNode)
 	for i, cmd := range inner.Commands {
 		if cmd == nil {
 			t.Errorf("inner.Commands[%d] = nil after clearing HeadCommands", i)

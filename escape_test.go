@@ -1,4 +1,4 @@
-package template_test
+package htt_test
 
 import (
 	"strings"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // TestEscapeJS exercises the public EscapeJS function against each of the
@@ -60,7 +60,7 @@ func TestEscapeJS(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, template.EscapeJS(tc.in), "EscapeJS(%q)", tc.in)
+			assert.Equal(t, tc.want, htt.EscapeJS(tc.in), "EscapeJS(%q)", tc.in)
 		})
 	}
 }
@@ -91,11 +91,11 @@ func TestEscapeJSFullRange(t *testing.T) {
 		"pqrstuvwxyz{|}~\u007f" +
 		"\u00A0\u0100\\u2028\\u2029\ufeff\U0001D11E"
 
-	assert.Equal(t, want, template.EscapeJS(input), "EscapeJS whole input")
+	assert.Equal(t, want, htt.EscapeJS(input), "EscapeJS whole input")
 
 	var buf strings.Builder
 	for _, c := range input {
-		buf.WriteString(template.EscapeJS(string(c)))
+		buf.WriteString(htt.EscapeJS(string(c)))
 	}
 	assert.Equal(t, want, buf.String(), "EscapeJS rune-by-rune agrees with whole-string")
 }
@@ -143,7 +143,7 @@ func TestFilterURL(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, template.FilterURL(tc.in), "FilterURL(%q)", tc.in)
+			assert.Equal(t, tc.want, htt.FilterURL(tc.in), "FilterURL(%q)", tc.in)
 		})
 	}
 }

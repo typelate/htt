@@ -1,11 +1,11 @@
-package template_test
+package htt_test
 
 import (
 	"testing"
 	"text/template/parse"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/template"
 )
 
 // TestTreeRootStart states that a defined tree's root starts where
@@ -34,7 +34,7 @@ func TestTreeRootStart(t *testing.T) {
 			want := int(trees[tt.template].Root.Position())
 
 			t.Run("text", func(t *testing.T) {
-				tmpl, err := template.New[any]("p").Parse(tt.text)
+				tmpl, err := htt.New[any]("p").Parse(tt.text)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -47,7 +47,7 @@ func TestTreeRootStart(t *testing.T) {
 				}
 			})
 			t.Run("html", func(t *testing.T) {
-				ts, err := html.New("p").Parse(tt.text)
+				ts, err := template.New("p").Parse(tt.text)
 				if err != nil {
 					t.Fatal(err)
 				}

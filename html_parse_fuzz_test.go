@@ -1,10 +1,10 @@
-package template
+package htt
 
 import (
 	"testing"
 	"text/template/parse"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // FuzzStdlibAcceptsImpliesHTMLParses checks that the HTML parser accepts

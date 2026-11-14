@@ -1,4 +1,4 @@
-package template_test
+package htt_test
 
 import (
 	"bytes"
@@ -6,8 +6,8 @@ import (
 	"io"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // FuzzExecuteHTMLStdlibCompat fuzzes with string data, comparing htt output
@@ -80,7 +80,7 @@ func FuzzExecuteHTMLStdlibCompat(f *testing.F) {
 		want := stdBuf.String()
 
 		// Parse with htt.
-		tree, err := template.ParseTree("test", "test", tmpl, nil, lex.Options{
+		tree, err := htt.ParseTree("test", "test", tmpl, nil, lex.Options{
 			LeftDelim:  "{{",
 			RightDelim: "}}",
 			ParseHTML:  true,
@@ -92,10 +92,10 @@ func FuzzExecuteHTMLStdlibCompat(f *testing.F) {
 			// That's not a crash bug, so skip.
 			return
 		}
-		template.AnnotateHTMLContexts(tree.Root)
+		htt.AnnotateHTMLContexts(tree.Root)
 
 		var httBuf bytes.Buffer
-		if err := template.ExecuteTemplate(&httBuf, tree, data); err != nil {
+		if err := htt.ExecuteTemplate(&httBuf, tree, data); err != nil {
 			// Execution error is not a panic; skip.
 			return
 		}
@@ -133,7 +133,7 @@ func FuzzExecuteTextNoPanic(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, tmpl string) {
-		tree, err := template.ParseTree("fuzz", "fuzz", tmpl, nil, lex.Options{
+		tree, err := htt.ParseTree("fuzz", "fuzz", tmpl, nil, lex.Options{
 			LeftDelim:  "{{",
 			RightDelim: "}}",
 			BreakOK:    true,
@@ -143,6 +143,6 @@ func FuzzExecuteTextNoPanic(f *testing.F) {
 			return
 		}
 		// Execute with nil data — errors are fine, panics are not.
-		template.ExecuteTemplate(io.Discard, tree, nil)
+		htt.ExecuteTemplate(io.Discard, tree, nil)
 	})
 }

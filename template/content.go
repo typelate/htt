@@ -1,4 +1,4 @@
-package html
+package template
 
 // The content types are this package's own, not aliases of
 // html/template's: laid over html/template in muxt's coverage pre-pass,

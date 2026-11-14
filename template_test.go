@@ -1,4 +1,4 @@
-package template_test
+package htt_test
 
 import (
 	"testing"
@@ -6,18 +6,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 func TestNew(t *testing.T) {
-	tmpl := template.New[any]("test")
+	tmpl := htt.New[any]("test")
 	assert.Equal(t, "test", tmpl.Name())
 	assert.Nil(t, tmpl.Tree(), "Tree() should be nil before parsing")
 	assert.Same(t, tmpl, tmpl.Lookup("test"), "Lookup(name) should return self")
 }
 
 func TestParse(t *testing.T) {
-	tmpl := template.New[any]("test")
+	tmpl := htt.New[any]("test")
 	result, err := tmpl.Parse("<div>hello</div>")
 	require.NoError(t, err)
 	assert.Same(t, tmpl, result, "Parse() should return the receiver")
@@ -26,7 +26,7 @@ func TestParse(t *testing.T) {
 }
 
 func TestParseWithDefine(t *testing.T) {
-	tmpl := template.New[any]("main")
+	tmpl := htt.New[any]("main")
 	_, err := tmpl.Parse(`<div>{{define "sub"}}<span>inner</span>{{end}}</div>`)
 	require.NoError(t, err)
 	sub := tmpl.Lookup("sub")
@@ -35,13 +35,13 @@ func TestParseWithDefine(t *testing.T) {
 }
 
 func TestFunctions(t *testing.T) {
-	tmpl := template.New[any]("test")
+	tmpl := htt.New[any]("test")
 	result := tmpl.Functions(map[string]any{"myfunc": nil})
 	assert.Same(t, tmpl, result, "Functions() should return the receiver")
 }
 
 func TestDelimiters(t *testing.T) {
-	tmpl := template.New[any]("test").Delimiters("<%", "%>")
+	tmpl := htt.New[any]("test").Delimiters("<%", "%>")
 	_, err := tmpl.Parse("<div><% .Title %></div>")
 	require.NoError(t, err)
 	require.NotNil(t, tmpl.Tree(), "Tree() should not be nil after parsing with custom delimiters")
@@ -49,25 +49,25 @@ func TestDelimiters(t *testing.T) {
 
 func TestOption(t *testing.T) {
 	t.Run("valid option", func(t *testing.T) {
-		tmpl := template.New[any]("test")
+		tmpl := htt.New[any]("test")
 		result, err := tmpl.Option("missingkey=error")
 		assert.NoError(t, err)
 		assert.Same(t, tmpl, result, "Option() should return the receiver")
 	})
 
 	t.Run("unknown option returns error", func(t *testing.T) {
-		_, err := template.New[any]("test").Option("badoption")
+		_, err := htt.New[any]("test").Option("badoption")
 		assert.Error(t, err)
 	})
 
 	t.Run("unknown missingkey value returns error", func(t *testing.T) {
-		_, err := template.New[any]("test").Option("missingkey=badvalue")
+		_, err := htt.New[any]("test").Option("missingkey=badvalue")
 		assert.Error(t, err)
 	})
 
 	t.Run("missingkey=default is accepted", func(t *testing.T) {
 		// stdlib html/template treats "default" as an alias for "invalid".
-		tmpl := template.New[any]("test")
+		tmpl := htt.New[any]("test")
 		result, err := tmpl.Option("missingkey=default")
 		assert.NoError(t, err)
 		assert.Same(t, tmpl, result, "Option() should return the receiver")
@@ -75,12 +75,12 @@ func TestOption(t *testing.T) {
 }
 
 func TestLookupNil(t *testing.T) {
-	tmpl := template.New[any]("test")
+	tmpl := htt.New[any]("test")
 	assert.Nil(t, tmpl.Lookup("nonexistent"))
 }
 
 func TestFindTree(t *testing.T) {
-	tmpl := template.New[any]("main")
+	tmpl := htt.New[any]("main")
 	_, err := tmpl.Parse("<p>hello</p>")
 	require.NoError(t, err)
 
@@ -94,12 +94,12 @@ func TestFindTree(t *testing.T) {
 }
 
 func TestAddParseTree(t *testing.T) {
-	tmpl := template.New[any]("main")
+	tmpl := htt.New[any]("main")
 	_, err := tmpl.Parse("<p>main</p>")
 	require.NoError(t, err)
 
 	// Parse another template to get a tree
-	other := template.New[any]("other")
+	other := htt.New[any]("other")
 	_, err = other.Parse("<span>other</span>")
 	require.NoError(t, err)
 
@@ -117,12 +117,12 @@ func TestAddParseTree(t *testing.T) {
 }
 
 func TestAddParseTreeAnnotatesContext(t *testing.T) {
-	tmpl := template.New[any]("main")
+	tmpl := htt.New[any]("main")
 	_, err := tmpl.Parse("<p>main</p>")
 	require.NoError(t, err)
 
 	// Parse a template with an action in an attribute
-	other := template.New[any]("link")
+	other := htt.New[any]("link")
 	_, err = other.Parse(`<a href="{{.URL}}">{{.Label}}</a>`)
 	require.NoError(t, err)
 
@@ -141,7 +141,7 @@ func TestAddParseTreeAnnotatesContext(t *testing.T) {
 // path, as text/template does.
 func TestTemplateParseRecordsTheNameAsGiven(t *testing.T) {
 	for _, name := range []string{"", "page", "GET /x F()"} {
-		ts, err := template.New[any](name).Parse(`{{define "inner"}}x{{end}}{{block "blk" .}}y{{end}}`)
+		ts, err := htt.New[any](name).Parse(`{{define "inner"}}x{{end}}{{block "blk" .}}y{{end}}`)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -171,7 +171,7 @@ func TestTemplateParseRedefinition(t *testing.T) {
 		{name: "a block in a define", text: `{{define "d"}}{{block "a" .}}x{{end}}{{end}}`, want: "x"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ts, err := template.New[any]("t").Parse(tt.text)
+			ts, err := htt.New[any]("t").Parse(tt.text)
 			if tt.wantErr != "" {
 				if err == nil || err.Error() != tt.wantErr {
 					t.Fatalf("Parse(%q) error = %v, want %q", tt.text, err, tt.wantErr)
@@ -196,7 +196,7 @@ func TestNewTextParsesAsText(t *testing.T) {
 	// A text/template set parses JSON and prose with '<' in them, and
 	// HTML-looking text a control structure crosses, as text/template does.
 	text := `{"a": "<x"} a < b {{if .X}}<!-- {{end}} --><p {{if .X}}>{{end}}`
-	ts, err := template.NewText[any]("t").Parse(text)
+	ts, err := htt.NewText[any]("t").Parse(text)
 	require.NoError(t, err)
 	assert.True(t, ts.IsText(), "IsText")
 	assert.False(t, ts.ParseOptions().ParseHTML, "ParseOptions().ParseHTML")
@@ -204,11 +204,11 @@ func TestNewTextParsesAsText(t *testing.T) {
 	require.True(t, ok)
 	assert.False(t, tree.HTMLMode, "HTMLMode")
 	assert.Equal(t, text, tree.Root.String())
-	template.Walk(tree, func(_ *template.Tree, n template.Node) {
+	htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
 		switch n.(type) {
-		case *template.HTMLElementNode, *template.HTMLCommentNode, *template.HTMLDocumentFragmentNode:
+		case *htt.HTMLElementNode, *htt.HTMLCommentNode, *htt.HTMLDocumentFragmentNode:
 			t.Errorf("NewText(...).Parse(%q) built %T", text, n)
 		}
 	})
-	assert.True(t, template.New[any]("t").ParseOptions().ParseHTML, "New(...).ParseOptions().ParseHTML")
+	assert.True(t, htt.New[any]("t").ParseOptions().ParseHTML, "New(...).ParseOptions().ParseHTML")
 }

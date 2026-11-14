@@ -1,4 +1,4 @@
-package template
+package htt
 
 import (
 	"strings"
@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 type htmlParseTest struct {

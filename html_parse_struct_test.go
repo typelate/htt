@@ -1,9 +1,9 @@
-package template
+package htt
 
 import (
 	"testing"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // TestHTMLParseStructural verifies that the unified parser produces a

@@ -1,4 +1,4 @@
-package template_test
+package htt_test
 
 import (
 	"testing"

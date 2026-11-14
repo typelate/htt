@@ -4,12 +4,12 @@
 //
 // Modifications copyright 2026 christopher hunter. all rights reserved.
 
-package template
+package htt
 
 import (
 	"iter"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // Extract walks the parsed AST and yields {{define}} nodes (DefineNode)

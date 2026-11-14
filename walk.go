@@ -1,4 +1,4 @@
-package template
+package htt
 
 // Walk traverses the tree in source order, pre-order, calling fn for
 // each node. It is a thin wrapper over WalkPath.

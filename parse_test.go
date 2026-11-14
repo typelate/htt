@@ -1,4 +1,4 @@
-package template
+package htt
 
 import (
 	"flag"
@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 var debug = flag.Bool("debug", false, "show the errors produced by the main tests")

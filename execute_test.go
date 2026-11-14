@@ -1,4 +1,4 @@
-package template_test
+package htt_test
 
 import (
 	"bytes"
@@ -15,14 +15,14 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // parseText parses a plain text template (non-HTML).
-func parseText(t *testing.T, name, text string) *template.Tree {
+func parseText(t *testing.T, name, text string) *htt.Tree {
 	t.Helper()
-	tree, err := template.ParseTree(name, name, text, nil, lex.Options{
+	tree, err := htt.ParseTree(name, name, text, nil, lex.Options{
 		LeftDelim:  "{{",
 		RightDelim: "}}",
 		BreakOK:    true,
@@ -33,9 +33,9 @@ func parseText(t *testing.T, name, text string) *template.Tree {
 }
 
 // parseHTML parses an HTML template and annotates HTML contexts for escaping.
-func parseHTML(t *testing.T, name, text string) *template.Tree {
+func parseHTML(t *testing.T, name, text string) *htt.Tree {
 	t.Helper()
-	tree, err := template.ParseTree(name, name, text, nil, lex.Options{
+	tree, err := htt.ParseTree(name, name, text, nil, lex.Options{
 		LeftDelim:  "{{",
 		RightDelim: "}}",
 		ParseHTML:  true,
@@ -43,42 +43,42 @@ func parseHTML(t *testing.T, name, text string) *template.Tree {
 		ContinueOK: true,
 	})
 	require.NoError(t, err, "parse %q", text)
-	template.AnnotateHTMLContexts(tree.Root)
+	htt.AnnotateHTMLContexts(tree.Root)
 	return tree
 }
 
 // execText executes a text template and returns the output.
-func execText(t *testing.T, name, tmpl string, data any, opts ...template.Option) string {
+func execText(t *testing.T, name, tmpl string, data any, opts ...htt.Option) string {
 	t.Helper()
 	tree := parseText(t, name, tmpl)
 	var buf bytes.Buffer
-	require.NoError(t, template.ExecuteTemplate(&buf, tree, data, opts...), "execute %q", tmpl)
+	require.NoError(t, htt.ExecuteTemplate(&buf, tree, data, opts...), "execute %q", tmpl)
 	return buf.String()
 }
 
 // execHTML executes an HTML template and returns the output.
-func execHTML(t *testing.T, name, tmpl string, data any, opts ...template.Option) string {
+func execHTML(t *testing.T, name, tmpl string, data any, opts ...htt.Option) string {
 	t.Helper()
 	tree := parseHTML(t, name, tmpl)
 	var buf bytes.Buffer
-	require.NoError(t, template.ExecuteTemplate(&buf, tree, data, opts...), "execute %q", tmpl)
+	require.NoError(t, htt.ExecuteTemplate(&buf, tree, data, opts...), "execute %q", tmpl)
 	return buf.String()
 }
 
 // execTextErr executes a text template and returns the error (nil if none).
-func execTextErr(t *testing.T, name, tmpl string, data any, opts ...template.Option) error {
+func execTextErr(t *testing.T, name, tmpl string, data any, opts ...htt.Option) error {
 	t.Helper()
 	tree := parseText(t, name, tmpl)
 	var buf bytes.Buffer
-	return template.ExecuteTemplate(&buf, tree, data, opts...)
+	return htt.ExecuteTemplate(&buf, tree, data, opts...)
 }
 
 // execHTMLErr executes an HTML template and returns the error (nil if none).
-func execHTMLErr(t *testing.T, name, tmpl string, data any, opts ...template.Option) error {
+func execHTMLErr(t *testing.T, name, tmpl string, data any, opts ...htt.Option) error {
 	t.Helper()
 	tree := parseHTML(t, name, tmpl)
 	var buf bytes.Buffer
-	return template.ExecuteTemplate(&buf, tree, data, opts...)
+	return htt.ExecuteTemplate(&buf, tree, data, opts...)
 }
 
 // textExecCase is the common shape for text-template tests that render a
@@ -144,12 +144,12 @@ func TestTextTemplate(t *testing.T) {
 }
 
 func TestUserFunc(t *testing.T) {
-	funcs := template.FuncMap{
+	funcs := htt.FuncMap{
 		"greet": func(name string) string {
 			return "Hello, " + name + "!"
 		},
 	}
-	got := execText(t, "test", `{{greet .}}`, "World", template.WithFuncs(funcs))
+	got := execText(t, "test", `{{greet .}}`, "World", htt.WithFuncs(funcs))
 	assert.Equal(t, "Hello, World!", got)
 }
 
@@ -158,21 +158,21 @@ func TestUserFunc(t *testing.T) {
 func TestTemplateCall(t *testing.T) {
 	mainTree := parseText(t, "main", `before {{template "sub" .}} after`)
 	subTree := parseText(t, "sub", `[{{.}}]`)
-	finder := template.FindTreeFunc(func(name string) (*template.Tree, bool) {
+	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
 		if name == "sub" {
 			return subTree, true
 		}
 		return nil, false
 	})
 	var buf bytes.Buffer
-	require.NoError(t, template.ExecuteTemplate(&buf, mainTree, "data", template.WithFinder(finder)))
+	require.NoError(t, htt.ExecuteTemplate(&buf, mainTree, "data", htt.WithFinder(finder)))
 	assert.Equal(t, "before [data] after", buf.String())
 }
 
 func TestTemplateNotFound(t *testing.T) {
 	mainTree := parseText(t, "main", `{{template "missing" .}}`)
 	var buf bytes.Buffer
-	err := template.ExecuteTemplate(&buf, mainTree, nil)
+	err := htt.ExecuteTemplate(&buf, mainTree, nil)
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "not defined")
 }
@@ -181,9 +181,9 @@ func TestTemplateNotFound(t *testing.T) {
 
 func TestElementSimple(t *testing.T) {
 	tree := parseHTML(t, "test", `<div>hello</div>`)
-	frag := tree.Root.Nodes[0].(*template.HTMLDocumentFragmentNode)
-	elem := frag.Children[0].(*template.HTMLElementNode)
-	node, err := template.ExecuteElement(tree, elem, nil)
+	frag := tree.Root.Nodes[0].(*htt.HTMLDocumentFragmentNode)
+	elem := frag.Children[0].(*htt.HTMLElementNode)
+	node, err := htt.ExecuteElement(tree, elem, nil)
 	require.NoError(t, err)
 	require.Equal(t, html.ElementNode, node.Type)
 	assert.Equal(t, "div", node.Data)
@@ -194,9 +194,9 @@ func TestElementSimple(t *testing.T) {
 
 func TestElementWithAttribute(t *testing.T) {
 	tree := parseHTML(t, "test", `<a href="https://example.com">link</a>`)
-	frag := tree.Root.Nodes[0].(*template.HTMLDocumentFragmentNode)
-	elem := frag.Children[0].(*template.HTMLElementNode)
-	node, err := template.ExecuteElement(tree, elem, nil)
+	frag := tree.Root.Nodes[0].(*htt.HTMLDocumentFragmentNode)
+	elem := frag.Children[0].(*htt.HTMLElementNode)
+	node, err := htt.ExecuteElement(tree, elem, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, node.Attr)
 	assert.Equal(t, "href", node.Attr[0].Key)
@@ -205,13 +205,13 @@ func TestElementWithAttribute(t *testing.T) {
 
 func TestElementDynamicAttribute(t *testing.T) {
 	tree := parseHTML(t, "test", `<a href="{{.URL}}">{{.Label}}</a>`)
-	frag := tree.Root.Nodes[0].(*template.HTMLDocumentFragmentNode)
-	elem := frag.Children[0].(*template.HTMLElementNode)
+	frag := tree.Root.Nodes[0].(*htt.HTMLDocumentFragmentNode)
+	elem := frag.Children[0].(*htt.HTMLElementNode)
 	data := struct {
 		URL   string
 		Label string
 	}{URL: "https://example.com", Label: "click"}
-	node, err := template.ExecuteElement(tree, elem, data)
+	node, err := htt.ExecuteElement(tree, elem, data)
 	require.NoError(t, err)
 	require.NotEmpty(t, node.Attr)
 	assert.Equal(t, "https://example.com", node.Attr[0].Val)
@@ -221,12 +221,12 @@ func TestElementDynamicAttribute(t *testing.T) {
 
 func TestElementConditionalAttribute(t *testing.T) {
 	tree := parseHTML(t, "test", `<div {{if .Active}}class="active"{{end}}></div>`)
-	frag := tree.Root.Nodes[0].(*template.HTMLDocumentFragmentNode)
-	elem := frag.Children[0].(*template.HTMLElementNode)
+	frag := tree.Root.Nodes[0].(*htt.HTMLDocumentFragmentNode)
+	elem := frag.Children[0].(*htt.HTMLElementNode)
 
 	// Active = true
 	data := struct{ Active bool }{Active: true}
-	node, err := template.ExecuteElement(tree, elem, data)
+	node, err := htt.ExecuteElement(tree, elem, data)
 	require.NoError(t, err)
 	found := false
 	for _, a := range node.Attr {
@@ -238,7 +238,7 @@ func TestElementConditionalAttribute(t *testing.T) {
 
 	// Active = false
 	data.Active = false
-	node, err = template.ExecuteElement(tree, elem, data)
+	node, err = htt.ExecuteElement(tree, elem, data)
 	require.NoError(t, err)
 	for _, a := range node.Attr {
 		if a.Key == "class" {
@@ -249,9 +249,9 @@ func TestElementConditionalAttribute(t *testing.T) {
 
 func TestElementRangeChildren(t *testing.T) {
 	tree := parseHTML(t, "test", `<ul>{{range .}}<li>{{.}}</li>{{end}}</ul>`)
-	frag := tree.Root.Nodes[0].(*template.HTMLDocumentFragmentNode)
-	elem := frag.Children[0].(*template.HTMLElementNode)
-	node, err := template.ExecuteElement(tree, elem, []string{"a", "b"})
+	frag := tree.Root.Nodes[0].(*htt.HTMLDocumentFragmentNode)
+	elem := frag.Children[0].(*htt.HTMLElementNode)
+	node, err := htt.ExecuteElement(tree, elem, []string{"a", "b"})
 	require.NoError(t, err)
 	// Count li children
 	count := 0
@@ -289,9 +289,9 @@ func TestHTMLComment(t *testing.T) {
 func TestMissingFieldError(t *testing.T) {
 	tree := parseText(t, "test", "{{.Missing}}")
 	var buf bytes.Buffer
-	err := template.ExecuteTemplate(&buf, tree, struct{}{})
+	err := htt.ExecuteTemplate(&buf, tree, struct{}{})
 	require.Error(t, err)
-	var execErr template.ExecError
+	var execErr htt.ExecError
 	require.ErrorAs(t, err, &execErr)
 }
 
@@ -318,14 +318,14 @@ func TestHTMLNestedElements(t *testing.T) {
 func TestHTMLWithTemplate(t *testing.T) {
 	mainTree := parseHTML(t, "main", `<div>{{template "inner" .}}</div>`)
 	innerTree := parseHTML(t, "inner", `<span>{{.}}</span>`)
-	finder := template.FindTreeFunc(func(name string) (*template.Tree, bool) {
+	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
 		if name == "inner" {
 			return innerTree, true
 		}
 		return nil, false
 	})
 	var buf bytes.Buffer
-	require.NoError(t, template.ExecuteTemplate(&buf, mainTree, "hello", template.WithFinder(finder)))
+	require.NoError(t, htt.ExecuteTemplate(&buf, mainTree, "hello", htt.WithFinder(finder)))
 	assert.Contains(t, buf.String(), "<span>hello</span>")
 }
 
@@ -334,41 +334,41 @@ func TestHTMLWithExtractedDefine(t *testing.T) {
 	// Extract produces a tree whose Root is a ListNode containing HTML nodes
 	// directly (no HTMLDocumentFragmentNode wrapper).
 	mainTree := parseHTML(t, "main", `<div>{{template "greeting" .}}</div>{{define "greeting"}}<span>Hi {{.}}</span>{{end}}`)
-	trees := make(map[string]*template.Tree)
+	trees := make(map[string]*htt.Tree)
 	trees["main"] = mainTree
-	for name, tr := range template.Extract(mainTree) {
-		template.AnnotateHTMLContexts(tr.Root)
+	for name, tr := range htt.Extract(mainTree) {
+		htt.AnnotateHTMLContexts(tr.Root)
 		trees[name] = tr
 	}
-	finder := template.FindTreeFunc(func(name string) (*template.Tree, bool) {
+	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
 		tr, ok := trees[name]
 		return tr, ok
 	})
 	var buf bytes.Buffer
-	require.NoError(t, template.ExecuteTemplate(&buf, mainTree, "Alice", template.WithFinder(finder)))
+	require.NoError(t, htt.ExecuteTemplate(&buf, mainTree, "Alice", htt.WithFinder(finder)))
 	assert.Contains(t, buf.String(), "<span>Hi Alice</span>")
 }
 
 func TestHTMLWithExtractedBlock(t *testing.T) {
-	trees := make(map[string]*template.Tree)
-	mainTree, err := template.ParseTree("main", "main", `<div>{{block "content" .}}<p>default {{.}}</p>{{end}}</div>`, trees, lex.NewOptions(nil))
+	trees := make(map[string]*htt.Tree)
+	mainTree, err := htt.ParseTree("main", "main", `<div>{{block "content" .}}<p>default {{.}}</p>{{end}}</div>`, trees, lex.NewOptions(nil))
 	require.NoError(t, err)
-	template.AnnotateHTMLContexts(mainTree.Root)
+	htt.AnnotateHTMLContexts(mainTree.Root)
 	for _, tr := range trees {
-		template.AnnotateHTMLContexts(tr.Root)
+		htt.AnnotateHTMLContexts(tr.Root)
 	}
-	finder := template.FindTreeFunc(func(name string) (*template.Tree, bool) {
+	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
 		tr, ok := trees[name]
 		return tr, ok
 	})
 	var buf bytes.Buffer
-	require.NoError(t, template.ExecuteTemplate(&buf, mainTree, "world", template.WithFinder(finder)))
+	require.NoError(t, htt.ExecuteTemplate(&buf, mainTree, "world", htt.WithFinder(finder)))
 	assert.Contains(t, buf.String(), "default world")
 }
 
 func TestExecErrorUnwrap(t *testing.T) {
 	inner := fmt.Errorf("inner error")
-	execErr := template.ExecError{Name: "test", Err: inner}
+	execErr := htt.ExecError{Name: "test", Err: inner}
 	assert.ErrorIs(t, execErr, inner)
 }
 
@@ -653,7 +653,7 @@ func TestErrorNilPointerAccess(t *testing.T) {
 	err := execTextErr(t, "test", "{{.X.Y}}", S{X: nil})
 	require.Error(t, err)
 	// Error should mention the field access failure.
-	var execErr template.ExecError
+	var execErr htt.ExecError
 	require.ErrorAs(t, err, &execErr)
 }
 
@@ -681,17 +681,17 @@ func TestMissingKeyZero(t *testing.T) {
 	t.Run("struct field error", func(t *testing.T) {
 		type S struct{ A string }
 		err := execTextErr(t, "test", `{{.B}}`, S{A: "a"},
-			template.WithMissingKey(template.MissingKeyZero))
+			htt.WithMissingKey(htt.MissingKeyZero))
 		require.Error(t, err)
 	})
 	t.Run("map key zero int", func(t *testing.T) {
 		got := execText(t, "test", `[{{.missing}}]`, map[string]int{"a": 1},
-			template.WithMissingKey(template.MissingKeyZero))
+			htt.WithMissingKey(htt.MissingKeyZero))
 		assert.Equal(t, "[0]", got)
 	})
 	t.Run("map key zero string", func(t *testing.T) {
 		got := execText(t, "test", `[{{.missing}}]`, map[string]string{"a": "b"},
-			template.WithMissingKey(template.MissingKeyZero))
+			htt.WithMissingKey(htt.MissingKeyZero))
 		assert.Equal(t, "[]", got)
 	})
 }
@@ -700,12 +700,12 @@ func TestMissingKeyError(t *testing.T) {
 	t.Run("struct field error", func(t *testing.T) {
 		type S struct{ A string }
 		err := execTextErr(t, "test", `{{.B}}`, S{A: "a"},
-			template.WithMissingKey(template.MissingKeyError))
+			htt.WithMissingKey(htt.MissingKeyError))
 		require.Error(t, err)
 	})
 	t.Run("map key error", func(t *testing.T) {
 		err := execTextErr(t, "test", `{{.missing}}`, map[string]int{"a": 1},
-			template.WithMissingKey(template.MissingKeyError))
+			htt.WithMissingKey(htt.MissingKeyError))
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "missing")
 	})
@@ -733,14 +733,14 @@ func TestErrorWrongArgCount(t *testing.T) {
 
 func TestErrorMaxRecursionDepth(t *testing.T) {
 	mainTree := parseText(t, "main", `{{template "main" .}}`)
-	finder := template.FindTreeFunc(func(name string) (*template.Tree, bool) {
+	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
 		if name == "main" {
 			return mainTree, true
 		}
 		return nil, false
 	})
 	var buf bytes.Buffer
-	err := template.ExecuteTemplate(&buf, mainTree, nil, template.WithFinder(finder))
+	err := htt.ExecuteTemplate(&buf, mainTree, nil, htt.WithFinder(finder))
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "exceeded maximum template depth")
 }
@@ -1118,7 +1118,7 @@ func TestStdlibCompat(t *testing.T) {
 
 func TestDocumentSimple(t *testing.T) {
 	tree := parseHTML(t, "test", `<div><p>hello</p></div>`)
-	doc, err := template.ExecuteDocument(tree, nil)
+	doc, err := htt.ExecuteDocument(tree, nil)
 	require.NoError(t, err)
 	require.Equal(t, html.DocumentNode, doc.Type)
 	// First child should be a div element.
@@ -1138,7 +1138,7 @@ func TestDocumentSimple(t *testing.T) {
 
 func TestDocumentWithData(t *testing.T) {
 	tree := parseHTML(t, "test", `<span>{{.}}</span>`)
-	doc, err := template.ExecuteDocument(tree, "world")
+	doc, err := htt.ExecuteDocument(tree, "world")
 	require.NoError(t, err)
 	span := doc.FirstChild
 	require.NotNil(t, span)
@@ -1150,7 +1150,7 @@ func TestDocumentWithData(t *testing.T) {
 
 func TestDocumentMultipleRoots(t *testing.T) {
 	tree := parseHTML(t, "test", `<p>one</p><p>two</p>`)
-	doc, err := template.ExecuteDocument(tree, nil)
+	doc, err := htt.ExecuteDocument(tree, nil)
 	require.NoError(t, err)
 	count := 0
 	for c := doc.FirstChild; c != nil; c = c.NextSibling {
@@ -1163,7 +1163,7 @@ func TestDocumentMultipleRoots(t *testing.T) {
 
 func TestDocumentRange(t *testing.T) {
 	tree := parseHTML(t, "test", `<ul>{{range .}}<li>{{.}}</li>{{end}}</ul>`)
-	doc, err := template.ExecuteDocument(tree, []string{"a", "b", "c"})
+	doc, err := htt.ExecuteDocument(tree, []string{"a", "b", "c"})
 	require.NoError(t, err)
 	ul := doc.FirstChild
 	require.NotNil(t, ul)
@@ -1179,7 +1179,7 @@ func TestDocumentRange(t *testing.T) {
 
 func TestDocumentAttributes(t *testing.T) {
 	tree := parseHTML(t, "test", `<a href="{{.}}">link</a>`)
-	doc, err := template.ExecuteDocument(tree, "https://example.com")
+	doc, err := htt.ExecuteDocument(tree, "https://example.com")
 	require.NoError(t, err)
 	a := doc.FirstChild
 	require.NotNil(t, a)
@@ -1191,14 +1191,14 @@ func TestDocumentAttributes(t *testing.T) {
 
 func TestDocumentNilTree(t *testing.T) {
 	tree := parseHTML(t, "test", ``)
-	doc, err := template.ExecuteDocument(tree, nil)
+	doc, err := htt.ExecuteDocument(tree, nil)
 	require.NoError(t, err)
 	assert.Equal(t, html.DocumentNode, doc.Type)
 }
 
 func TestDocumentNonHTMLTreeErrors(t *testing.T) {
 	tree := parseText(t, "test", `hello {{.}}`)
-	_, err := template.ExecuteDocument(tree, "world")
+	_, err := htt.ExecuteDocument(tree, "world")
 	require.Error(t, err)
 }
 
@@ -1232,7 +1232,7 @@ func TestHTMLMissingMapKeyInAttrListAction(t *testing.T) {
 	require.NotPanics(t, func() {
 		tree := parseHTML(t, "test", `<ul>{{range .Items}}<li {{.Cls}}>{{.Name}}</li>{{end}}</ul>`)
 		var buf bytes.Buffer
-		_ = template.ExecuteTemplate(&buf, tree, map[string]any{
+		_ = htt.ExecuteTemplate(&buf, tree, map[string]any{
 			"Items": []map[string]string{{"Name": "x"}},
 		})
 	})
@@ -1338,25 +1338,25 @@ func TestHTMLActualEventHandlerAttr(t *testing.T) {
 // short-circuiting, this test fails as a reminder to update that note.
 func TestAndOrShortCircuit(t *testing.T) {
 	var fCalls, gCalls, hCalls int
-	funcs := template.FuncMap{
+	funcs := htt.FuncMap{
 		"f": func() string { fCalls++; return "" },  // empty (falsy)
 		"g": func() string { gCalls++; return "x" }, // non-empty (truthy)
 		"h": func() string { hCalls++; return "y" }, // non-empty (truthy)
 	}
 	// and stops at the first empty argument: f is empty, so g is never called.
-	execText(t, "and", `{{and (f) (g)}}`, nil, template.WithFuncs(funcs))
+	execText(t, "and", `{{and (f) (g)}}`, nil, htt.WithFuncs(funcs))
 	assert.Equal(t, 1, fCalls, "and evaluates the first argument")
 	assert.Equal(t, 0, gCalls, "and short-circuits: the second argument is not evaluated")
 
 	// or stops at the first non-empty argument: g is non-empty, so h is not called.
 	gCalls = 0
-	execText(t, "or", `{{or (g) (h)}}`, nil, template.WithFuncs(funcs))
+	execText(t, "or", `{{or (g) (h)}}`, nil, htt.WithFuncs(funcs))
 	assert.Equal(t, 1, gCalls, "or evaluates the first argument")
 	assert.Equal(t, 0, hCalls, "or short-circuits: the second argument is not evaluated")
 
 	// and keeps going while arguments are truthy: g is non-empty, so h runs too.
 	gCalls, hCalls = 0, 0
-	execText(t, "and2", `{{and (g) (h)}}`, nil, template.WithFuncs(funcs))
+	execText(t, "and2", `{{and (g) (h)}}`, nil, htt.WithFuncs(funcs))
 	assert.Equal(t, 1, gCalls)
 	assert.Equal(t, 1, hCalls, "and keeps evaluating while arguments are truthy")
 }
@@ -1365,14 +1365,14 @@ func TestAndOrShortCircuit(t *testing.T) {
 // only to the built-in: a user-supplied and/or is a normal (eager) call.
 func TestAndOrUserOverrideNotShortCircuited(t *testing.T) {
 	var fCalls, gCalls int
-	funcs := template.FuncMap{
+	funcs := htt.FuncMap{
 		"f":   func() string { fCalls++; return "" }, // empty (falsy)
 		"g":   func() string { gCalls++; return "x" },
 		"and": func(a, b string) string { return a + b }, // shadows the built-in
 	}
 	// f is empty; the built-in and would stop and never call g. The user's
 	// and takes both arguments, so g must still be evaluated.
-	execText(t, "override", `{{and (f) (g)}}`, nil, template.WithFuncs(funcs))
+	execText(t, "override", `{{and (f) (g)}}`, nil, htt.WithFuncs(funcs))
 	assert.Equal(t, 1, fCalls)
 	assert.Equal(t, 1, gCalls, "a user-supplied and is a normal (eager) call, not short-circuited")
 }

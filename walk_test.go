@@ -1,4 +1,4 @@
-package template
+package htt
 
 import (
 	"fmt"
@@ -6,7 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/typelate/muxt/template/lex"
+
+	"github.com/typelate/htt/lex"
 )
 
 func TestWalkPath(t *testing.T) {
@@ -23,7 +24,7 @@ func TestWalkPath(t *testing.T) {
 	})
 	// Root list > fragment > table > if > list > div: branch and list
 	// nodes are present in the path so checkers can see control flow.
-	assert.Equal(t, []string{"*template.ListNode", "*template.HTMLDocumentFragmentNode", "*template.HTMLElementNode", "*template.IfNode", "*template.ListNode"}, divPath)
+	assert.Equal(t, []string{"*htt.ListNode", "*htt.HTMLDocumentFragmentNode", "*htt.HTMLElementNode", "*htt.IfNode", "*htt.ListNode"}, divPath)
 }
 
 func nodeTypeName(n Node) string { return fmt.Sprintf("%T", n) }

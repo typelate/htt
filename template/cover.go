@@ -1,4 +1,4 @@
-package html
+package template
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // CoverEnv names the environment variable that turns on node coverage
@@ -100,14 +100,14 @@ func (c *coverExport) disable(err error) {
 // one for the process, keeps the export from holding every tree ever
 // parsed and walking all of them after each execute; c.written carries
 // what is already in the file. It returns only the execution error.
-func (c *coverExport) execute(wr io.Writer, tree *template.Tree, data any, opts []template.Option) error {
-	cp := new(template.CoverProfile)
-	err := template.ExecuteTemplate(wr, tree, data, append(opts, template.WithCoverProfile(cp))...)
+func (c *coverExport) execute(wr io.Writer, tree *htt.Tree, data any, opts []htt.Option) error {
+	cp := new(htt.CoverProfile)
+	err := htt.ExecuteTemplate(wr, tree, data, append(opts, htt.WithCoverProfile(cp))...)
 	c.append(cp)
 	return err
 }
 
-func (c *coverExport) append(cp *template.CoverProfile) {
+func (c *coverExport) append(cp *htt.CoverProfile) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.disabled {

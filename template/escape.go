@@ -1,4 +1,4 @@
-package html
+package template
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/url"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // HTMLEscape writes to w the escaped HTML equivalent of the plain text data b.
@@ -32,7 +32,7 @@ func JSEscape(w io.Writer, b []byte) {
 
 // JSEscapeString returns the escaped JavaScript equivalent of the plain text data s.
 func JSEscapeString(s string) string {
-	return template.EscapeJS(s)
+	return htt.EscapeJS(s)
 }
 
 // JSEscaper returns the escaped JavaScript equivalent of the textual
@@ -51,5 +51,5 @@ func URLQueryEscaper(args ...any) string {
 // of its type, and whether the value is valid. This is the definition of
 // truth used by if and other such actions.
 func IsTrue(val any) (truth, ok bool) {
-	return template.IsTrue(val)
+	return htt.IsTrue(val)
 }

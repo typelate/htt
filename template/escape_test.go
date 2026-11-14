@@ -1,4 +1,4 @@
-package html_test
+package template_test
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt/template"
 )
 
 func TestJSEscapeString(t *testing.T) {
@@ -49,7 +49,7 @@ func TestJSEscapeString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := html.JSEscapeString(tt.input)
+			got := template.JSEscapeString(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -81,7 +81,7 @@ func TestJSEscape(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			html.JSEscape(&buf, []byte(tt.input))
+			template.JSEscape(&buf, []byte(tt.input))
 			assert.Equal(t, tt.want, buf.String())
 		})
 	}

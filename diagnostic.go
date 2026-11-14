@@ -1,10 +1,10 @@
-package template
+package htt
 
 import (
 	"fmt"
 	"slices"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // Severity indicates how a structural diagnostic should be treated.

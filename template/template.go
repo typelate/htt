@@ -17,7 +17,7 @@
 //
 // Derived in part from the Go standard library; see NOTICE.txt at the
 // repository root.
-package html
+package template
 
 import (
 	"cmp"
@@ -29,8 +29,8 @@ import (
 	"strings"
 	texttemplate "text/template"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // FuncMap is the type of the map defining the mapping from names to functions.
@@ -45,7 +45,7 @@ type FuncMap = texttemplate.FuncMap
 type Template struct {
 	// Tree is the parse tree for this template. It is exported so that
 	// tools can inspect and modify the AST.
-	Tree *template.Tree
+	Tree *htt.Tree
 
 	name   string
 	common *common
@@ -53,8 +53,8 @@ type Template struct {
 
 type common struct {
 	tmpl       map[string]*Template
-	funcMap    template.FuncMap
-	missingKey template.MissingKeyMode
+	funcMap    htt.FuncMap
+	missingKey htt.MissingKeyMode
 	leftDelim  string
 	rightDelim string
 }
@@ -144,7 +144,7 @@ func (t *Template) DefinedTemplates() string {
 // value is the template, so calls can be chained.
 func (t *Template) Funcs(funcMap FuncMap) *Template {
 	if t.common.funcMap == nil {
-		t.common.funcMap = make(template.FuncMap)
+		t.common.funcMap = make(htt.FuncMap)
 	}
 	for k, v := range funcMap {
 		t.common.funcMap[k] = v
@@ -187,11 +187,11 @@ func (t *Template) Option(opt ...string) *Template {
 			value := o[len("missingkey="):]
 			switch value {
 			case "default", "invalid":
-				t.common.missingKey = template.MissingKeyInvalid
+				t.common.missingKey = htt.MissingKeyInvalid
 			case "zero":
-				t.common.missingKey = template.MissingKeyZero
+				t.common.missingKey = htt.MissingKeyZero
 			case "error":
-				t.common.missingKey = template.MissingKeyError
+				t.common.missingKey = htt.MissingKeyError
 			default:
 				panic(fmt.Sprintf("template: unknown missing key option %q", o))
 			}
@@ -207,8 +207,8 @@ func (t *Template) Option(opt ...string) *Template {
 // templates associated with t and are removed from the definition of t itself.
 func (t *Template) Parse(text string) (*Template, error) {
 	options := t.lexOptions()
-	treeSet := make(map[string]*template.Tree)
-	tree, err := template.ParseTree(t.name, t.name, text, treeSet, options)
+	treeSet := make(map[string]*htt.Tree)
+	tree, err := htt.ParseTree(t.name, t.name, text, treeSet, options)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +219,7 @@ func (t *Template) Parse(text string) (*Template, error) {
 	for _, tr := range treeSet {
 		tr.ParseName, tr.Filepath = t.name, ""
 	}
-	for name, tr := range template.DefinedTrees(tree, treeSet) {
+	for name, tr := range htt.DefinedTrees(tree, treeSet) {
 		if _, err := t.AddParseTree(name, tr); err != nil {
 			return nil, err
 		}
@@ -232,9 +232,9 @@ func (t *Template) Parse(text string) (*Template, error) {
 // becomes its definition. If it has been defined and already has that name,
 // the existing definition is replaced; otherwise a new template is created,
 // defined, and returned.
-func (t *Template) AddParseTree(name string, tree *template.Tree) (*Template, error) {
+func (t *Template) AddParseTree(name string, tree *htt.Tree) (*Template, error) {
 	tree.HTMLMode = true
-	template.AnnotateHTMLContexts(tree.Root)
+	htt.AnnotateHTMLContexts(tree.Root)
 	tmpl := t.common.tmpl[name]
 	if tmpl == nil {
 		tmpl = &Template{
@@ -245,7 +245,7 @@ func (t *Template) AddParseTree(name string, tree *template.Tree) (*Template, er
 	}
 	// As html/template does, an empty tree does not replace one the
 	// template already has.
-	if tmpl.Tree == nil || !template.IsEmptyTree(tree.Root) {
+	if tmpl.Tree == nil || !htt.IsEmptyTree(tree.Root) {
 		tmpl.Tree = tree
 	}
 	return tmpl, nil
@@ -318,7 +318,7 @@ func (t *Template) execute(wr io.Writer, name string, data any) error {
 	if processCover != nil {
 		return processCover.execute(wr, tmpl.Tree, data, opts)
 	}
-	return template.ExecuteTemplate(wr, tmpl.Tree, data, opts...)
+	return htt.ExecuteTemplate(wr, tmpl.Tree, data, opts...)
 }
 
 // ParseFiles parses the named files and associates the resulting templates
@@ -341,22 +341,22 @@ func (t *Template) ParseFS(fsys fs.FS, patterns ...string) (*Template, error) {
 }
 
 // execOptions builds a slice of htt.Option from the template's configuration.
-func (t *Template) execOptions() []template.Option {
-	opts := []template.Option{template.WithTrust(trustOf)}
+func (t *Template) execOptions() []htt.Option {
+	opts := []htt.Option{htt.WithTrust(trustOf)}
 	if t.common.funcMap != nil {
-		opts = append(opts, template.WithFuncs(t.common.funcMap))
+		opts = append(opts, htt.WithFuncs(t.common.funcMap))
 	}
-	if t.common.missingKey != template.MissingKeyInvalid {
-		opts = append(opts, template.WithMissingKey(t.common.missingKey))
+	if t.common.missingKey != htt.MissingKeyInvalid {
+		opts = append(opts, htt.WithMissingKey(t.common.missingKey))
 	}
-	finder := template.FindTreeFunc(func(name string) (*template.Tree, bool) {
+	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
 		tmpl := t.common.tmpl[name]
 		if tmpl != nil && tmpl.Tree != nil {
 			return tmpl.Tree, true
 		}
 		return nil, false
 	})
-	opts = append(opts, template.WithFinder(finder))
+	opts = append(opts, htt.WithFinder(finder))
 	return opts
 }
 

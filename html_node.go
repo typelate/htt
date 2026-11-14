@@ -1,10 +1,10 @@
-package template
+package htt
 
 import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // HTMLDocumentFragmentNode is the top-level container for HTML+template content.

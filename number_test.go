@@ -1,10 +1,10 @@
-package template
+package htt
 
 import (
 	"fmt"
 	"testing"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // numberCase describes a single numeric literal and the classifications
