@@ -892,7 +892,7 @@ func (s *state) walkHTMLNode(dot reflect.Value, node Node) ([]*html.Node, error)
 
 func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html.Node, error) {
 	if at := s.tagAt(); at != nil && at.part != tagNone {
-		return nil, s.errorf("<%s> in a tag that muxt's template engine cannot follow", elem.TagName)
+		return nil, s.errorf("<%s> in a tag that htt cannot follow", elem.TagName)
 	}
 	elem.openCount.Add(1)
 	n := &html.Node{
@@ -971,7 +971,7 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 		// one template opens <main> and another closes it.
 		s.markup.leaveOpen(n)
 	} else if at := s.tagAt(); at != nil && at.part != tagNone {
-		return nil, s.errorf("</%s> in a tag that muxt's template engine cannot follow", elem.TagName)
+		return nil, s.errorf("</%s> in a tag that htt cannot follow", elem.TagName)
 	}
 	return n, nil
 }
@@ -1176,7 +1176,7 @@ func (s *state) walkHTMLTagAction(val reflect.Value, scan *tagScan) ([]*html.Nod
 		ctx := &HTMLContext{State: "attr", Element: at.element, Attr: valueAttr(at.attr)}
 		text = escapeAttrText(escapeAttrValue(text, ctx, trust), at.quote)
 	default:
-		return nil, s.errorf("an action in a tag that muxt's template engine cannot follow")
+		return nil, s.errorf("an action in a tag that htt cannot follow")
 	}
 	return []*html.Node{{Type: html.RawNode, Data: text}}, nil
 }
@@ -1503,7 +1503,7 @@ func htmlNodeText(n *html.Node) string {
 // errTemplateInTag is the error for a {{template}} call among a tag's
 // attributes: the called tree was parsed as content, not as attributes.
 func errTemplateInTag(s *state, n *TemplateNode) error {
-	return s.errorf("{{template %q}} in a tag is not supported by muxt's template engine", n.Name)
+	return s.errorf("{{template %q}} in a tag is not supported by htt", n.Name)
 }
 
 // rawAttrText returns the text of a node from an attribute value as
