@@ -362,7 +362,7 @@ func (e *escaper) escapeBranch(c context, node htt.Node, n *htt.BranchNode, node
 	if nodeName == "range" {
 		e.rangeContext = &rangeContext{outer: e.rangeContext}
 	}
-	c0 := e.escapeList(c.clone(), n.List, n.StartTrimRight, bodyTrimLast(n))
+	c0 := e.escapeList(c.clone(), n.List, n.StartTrimRight, n.BodyTrimLast())
 	if nodeName == "range" {
 		if c0.state != stateError {
 			c0 = joinRange(c0, e.rangeContext)
@@ -376,7 +376,7 @@ func (e *escaper) escapeBranch(c context, node htt.Node, n *htt.BranchNode, node
 		// We check that executing n.List once results in the same context
 		// as executing n.List twice.
 		e.rangeContext = &rangeContext{outer: e.rangeContext}
-		c1, _ := e.escapeListConditionally(c0, n.List, n.StartTrimRight, bodyTrimLast(n), nil)
+		c1, _ := e.escapeListConditionally(c0, n.List, n.StartTrimRight, n.BodyTrimLast(), nil)
 		c0 = join(c0, c1, node, nodeName)
 		if c0.state == stateError {
 			e.rangeContext = e.rangeContext.outer
@@ -395,15 +395,6 @@ func (e *escaper) escapeBranch(c context, node htt.Node, n *htt.BranchNode, node
 	}
 	c1 := e.escapeList(c.clone(), n.ElseList, n.ElseTrimRight, n.EndTrimLeft)
 	return join(c0, c1, node, nodeName)
-}
-
-// bodyTrimLast reports whether the body of n trims the space after its last
-// node, as the executor decides it. Changed: new.
-func bodyTrimLast(n *htt.BranchNode) bool {
-	if n.ElseList != nil && len(n.ElseList.Nodes) > 0 {
-		return n.ElseTrimLeft
-	}
-	return n.EndTrimLeft
 }
 
 // joinRange merges the contexts at break and continue statements into the

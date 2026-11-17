@@ -497,6 +497,16 @@ func (b *BranchNode) ElseChain() *BranchNode {
 	}
 }
 
+// BodyTrimLast reports whether the body's last node trims the space after
+// it. When the else list has nodes it sits next to the body, so its {{- decides;
+// otherwise the {{- on the end does.
+func (b *BranchNode) BodyTrimLast() bool {
+	if b.ElseList != nil && len(b.ElseList.Nodes) > 0 {
+		return b.ElseTrimLeft
+	}
+	return b.EndTrimLeft
+}
+
 func (b *BranchNode) tree() *Tree { return b.tr }
 
 func (b *BranchNode) writeTo(sb *strings.Builder, keyword string) {
