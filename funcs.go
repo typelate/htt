@@ -483,10 +483,10 @@ func goodFunc(typ reflect.Type) bool {
 
 var errorType = reflect.TypeFor[error]()
 
-// indirect dereferences v through its pointers and reports whether it met
-// a nil one.
+// indirect dereferences v through its pointers and interfaces and reports
+// whether it met a nil one.
 func indirect(v reflect.Value) (rv reflect.Value, isNil bool) {
-	for ; v.Kind() == reflect.Pointer; v = v.Elem() {
+	for ; v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface; v = v.Elem() {
 		if v.IsNil() {
 			return v, true
 		}

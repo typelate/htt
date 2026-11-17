@@ -930,30 +930,24 @@ func httText(test execTest) (out string, failed bool) {
 
 // Reasons a case diverges. Cases with the same cause share a string.
 const (
-	causeIfaceUnwrap = "len, index and range do not look through interface-typed values"
-	causeSlicePtr    = "slice does not accept a pointer to an array"
-	causeUnsafePtr   = "if does not accept unsafe.Pointer"
-	causePtrToIface  = "a method is not found through a pointer to an interface"
-	causeStringer    = "String and Error are not found through an addressable value when printing"
-	causePrintPtr    = "a pointer is not dereferenced when printed or passed to html"
+	causeSlicePtr   = "slice does not accept a pointer to an array"
+	causeUnsafePtr  = "if does not accept unsafe.Pointer"
+	causePtrToIface = "a method is not found through a pointer to an interface"
+	causeStringer   = "String and Error are not found through an addressable value when printing"
+	causePrintPtr   = "a pointer is not dereferenced when printed or passed to html"
 )
 
 // execDivergences maps a case name to why htt differs from text/template.
 var execDivergences = map[string]string{
-	"len of an interface field": causeIfaceUnwrap,
-	"range empty interface":     causeIfaceUnwrap,
-	"bug17c":                    causeIfaceUnwrap,
-	"bug17d":                    causeIfaceUnwrap,
-	"bug17e":                    causeIfaceUnwrap,
-	"pointer to array[:]":       causeSlicePtr,
-	"pointer to array[1:]":      causeSlicePtr,
-	"pointer to array[1:2]":     causeSlicePtr,
-	"if UPI":                    causeUnsafePtr,
-	"if EmptyUPI":               causeUnsafePtr,
-	"bug1":                      causePtrToIface,
-	"V{6666}.String()":          causeStringer,
-	"W{888}.Error()":            causeStringer,
-	"empty with struct":         causePrintPtr,
+	"pointer to array[:]":   causeSlicePtr,
+	"pointer to array[1:]":  causeSlicePtr,
+	"pointer to array[1:2]": causeSlicePtr,
+	"if UPI":                causeUnsafePtr,
+	"if EmptyUPI":           causeUnsafePtr,
+	"bug1":                  causePtrToIface,
+	"V{6666}.String()":      causeStringer,
+	"W{888}.Error()":        causeStringer,
+	"empty with struct":     causePrintPtr,
 }
 
 func TestCompatTextExecTests(t *testing.T) {
