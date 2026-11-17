@@ -504,14 +504,15 @@ func (s *state) walkTemplateNode(dot reflect.Value, t *TemplateNode) error {
 		}
 	}
 	newState := &state{
-		wr:     s.wr,
-		tree:   tree,
-		cp:     s.cp,
-		depth:  s.depth + 1,
-		funcs:  s.funcs,
-		finder: s.finder,
-		trust:  s.trust,
-		vars:   []variable{{"$", newDot}},
+		wr:         s.wr,
+		tree:       tree,
+		cp:         s.cp,
+		depth:      s.depth + 1,
+		funcs:      s.funcs,
+		finder:     s.finder,
+		missingKey: s.missingKey,
+		trust:      s.trust,
+		vars:       []variable{{"$", newDot}},
 	}
 	return newState.execute(newDot)
 }
@@ -1569,14 +1570,15 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 	// Execute the template into a buffer and parse the result as HTML? No —
 	// we walk the sub-template's tree and collect html.Nodes.
 	newState := &state{
-		tree:   tree,
-		cp:     s.cp,
-		depth:  s.depth + 1,
-		funcs:  s.funcs,
-		finder: s.finder,
-		trust:  s.trust,
-		markup: s.markup,
-		vars:   []variable{{"$", newDot}},
+		tree:       tree,
+		cp:         s.cp,
+		depth:      s.depth + 1,
+		funcs:      s.funcs,
+		finder:     s.finder,
+		missingKey: s.missingKey,
+		trust:      s.trust,
+		markup:     s.markup,
+		vars:       []variable{{"$", newDot}},
 		// The called template's text carries on where this one's
 		// stands; in an attribute value it is escaped whole.
 		scan:          s.tagAt(),
