@@ -385,7 +385,7 @@ func TestAutoEscape(t *testing.T) {
 					name:     "{{js .}} in text context applies js escaping",
 					template: `<p>{{js .}}</p>`,
 					data:     `</p><script>alert(1)</script>`,
-					want:     `<p>\x3C/p\x3E\x3Cscript\x3Ealert(1)\x3C/script\x3E</p>`,
+					want:     "<p>\\u003C/p\\u003E\\u003Cscript\\u003Ealert(1)\\u003C/script\\u003E</p>",
 				},
 				{
 					name:     "{{js .}} in event handler double-escapes",

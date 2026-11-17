@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	texttemplate "text/template"
 )
 
 // builtins returns the functions every template may call.
@@ -431,14 +432,7 @@ func htmlEscaper(args ...any) string {
 }
 
 func jsEscaper(args ...any) string {
-	return strings.NewReplacer(
-		`\`, `\\`,
-		`"`, `\"`,
-		"'", `\'`,
-		"<", `\x3C`,
-		">", `\x3E`,
-		"&", `\x26`,
-	).Replace(fmt.Sprint(args...))
+	return texttemplate.JSEscaper(args...)
 }
 
 func urlQueryEscaper(args ...any) string {
