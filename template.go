@@ -143,7 +143,7 @@ func (t *Template[S]) Lookup(name string) *Template[S] {
 }
 
 func (t *Template[S]) FindTree(name string) (*Tree, bool) {
-	if tmpl := t.templates[name]; tmpl != nil {
+	if tmpl := t.templates[name]; tmpl != nil && tmpl.tree != nil {
 		return tmpl.tree, true
 	}
 	return nil, false

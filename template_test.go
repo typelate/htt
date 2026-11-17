@@ -93,6 +93,15 @@ func TestFindTree(t *testing.T) {
 	assert.Nil(t, tree, `FindTree("nonexistent") tree should be nil`)
 }
 
+func TestFindTreeOfAnUnparsedTemplate(t *testing.T) {
+	tmpl := htt.New[any]("main")
+
+	tree, ok := tmpl.FindTree("main")
+
+	assert.False(t, ok, `FindTree("main") before Parse`)
+	assert.Nil(t, tree)
+}
+
 func TestAddParseTree(t *testing.T) {
 	tmpl := htt.New[any]("main")
 	_, err := tmpl.Parse("<p>main</p>")
