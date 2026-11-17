@@ -1,50 +1,48 @@
 package template
 
 import (
-	"fmt"
-	"html"
 	"io"
-	"net/url"
+	texttemplate "text/template"
 
 	"github.com/typelate/htt"
 )
 
 // HTMLEscape writes to w the escaped HTML equivalent of the plain text data b.
 func HTMLEscape(w io.Writer, b []byte) {
-	_, _ = io.WriteString(w, html.EscapeString(string(b)))
+	texttemplate.HTMLEscape(w, b)
 }
 
 // HTMLEscapeString returns the escaped HTML equivalent of the plain text data s.
 func HTMLEscapeString(s string) string {
-	return html.EscapeString(s)
+	return texttemplate.HTMLEscapeString(s)
 }
 
 // HTMLEscaper returns the escaped HTML equivalent of the textual
 // representation of its arguments.
 func HTMLEscaper(args ...any) string {
-	return html.EscapeString(fmt.Sprint(args...))
+	return texttemplate.HTMLEscaper(args...)
 }
 
 // JSEscape writes to w the escaped JavaScript equivalent of the plain text data b.
 func JSEscape(w io.Writer, b []byte) {
-	_, _ = io.WriteString(w, JSEscapeString(string(b)))
+	texttemplate.JSEscape(w, b)
 }
 
 // JSEscapeString returns the escaped JavaScript equivalent of the plain text data s.
 func JSEscapeString(s string) string {
-	return htt.EscapeJS(s)
+	return texttemplate.JSEscapeString(s)
 }
 
 // JSEscaper returns the escaped JavaScript equivalent of the textual
 // representation of its arguments.
 func JSEscaper(args ...any) string {
-	return JSEscapeString(fmt.Sprint(args...))
+	return texttemplate.JSEscaper(args...)
 }
 
 // URLQueryEscaper returns the escaped value of the textual representation
 // of its arguments in a form suitable for embedding in a URL query.
 func URLQueryEscaper(args ...any) string {
-	return url.QueryEscape(fmt.Sprint(args...))
+	return texttemplate.URLQueryEscaper(args...)
 }
 
 // IsTrue reports whether the value is 'true', in the sense of not the zero

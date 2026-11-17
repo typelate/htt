@@ -23,22 +23,22 @@ func TestJSEscapeString(t *testing.T) {
 		{
 			name:  "line separator U+2028",
 			input: "\u2028",
-			want:  `\u2028`,
+			want:  "\\u2028",
 		},
 		{
 			name:  "paragraph separator U+2029",
 			input: "\u2029",
-			want:  `\u2029`,
+			want:  "\\u2029",
 		},
 		{
 			name:  "backtick",
 			input: "`",
-			want:  `\u0060`,
+			want:  "`",
 		},
 		{
 			name:  "basic escapes still work",
 			input: `\"'<>&`,
-			want:  `\\\u0022\u0027\u003c\u003e\u0026`,
+			want:  "\\\\\\\"\\'\\u003C\\u003E\\u0026",
 		},
 		{
 			name:  "plain text unchanged",
@@ -69,12 +69,12 @@ func TestJSEscape(t *testing.T) {
 		{
 			name:  "line separator U+2028",
 			input: "\u2028",
-			want:  `\u2028`,
+			want:  "\\u2028",
 		},
 		{
 			name:  "backtick",
 			input: "`",
-			want:  `\u0060`,
+			want:  "`",
 		},
 	}
 
