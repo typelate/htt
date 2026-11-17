@@ -35,6 +35,18 @@ func (cp *CoverProfile) AddTree(tree *Tree) {
 	cp.trees = append(cp.trees, tree)
 }
 
+// Trees returns the trees added to the profile, in the order they were added.
+func (cp *CoverProfile) Trees() []*Tree {
+	if cp == nil {
+		return nil
+	}
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	trees := make([]*Tree, len(cp.trees))
+	copy(trees, cp.trees)
+	return trees
+}
+
 // CoverBlock is one span of a template's source that a cover profile counts.
 type CoverBlock struct {
 	ParseName              string

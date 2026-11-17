@@ -153,3 +153,50 @@ func coverFromCounts(t *testing.T, set *htt.Template[any]) map[string]int64 {
 	}
 	return counts
 }
+
+// TestCoverProfileTrees: Trees lists the trees a profile ran, the page first
+// and then each callee once, in the order they first ran.
+func TestCoverProfileTrees(t *testing.T) {
+	set, err := htt.New[any]("page").Parse(`{{template "a" .}}{{template "b" .}}{{template "a" .}}{{define "a"}}A{{end}}{{define "b"}}B{{end}}`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	page, ok := set.FindTree("page")
+	if !ok {
+		t.Fatal("no tree named page")
+	}
+	a, ok := set.FindTree("a")
+	if !ok {
+		t.Fatal("no tree named a")
+	}
+	b, ok := set.FindTree("b")
+	if !ok {
+		t.Fatal("no tree named b")
+	}
+
+	var nilProfile *htt.CoverProfile
+	if got := nilProfile.Trees(); got != nil {
+		t.Fatalf("nil profile Trees() = %v, want nil", got)
+	}
+
+	cp := new(htt.CoverProfile)
+	var b2 strings.Builder
+	if err := htt.ExecuteTemplate(&b2, page, nil, htt.WithFinder(set), htt.WithCoverProfile(cp)); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := cp.Trees()
+	want := []*htt.Tree{page, a, b}
+	if len(got) != len(want) {
+		t.Fatalf("Trees() has %d trees, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("Trees()[%d] is not the tree want[%d]", i, i)
+		}
+	}
+
+	got[0] = nil
+	if cp.Trees()[0] != page {
+		t.Error("Trees() returned a slice that shares the profile's storage")
+	}
+}
