@@ -7,6 +7,8 @@
 // each case through text/template as the oracle and through htt in text
 // mode.
 
+//lint:file-ignore U1000,ST1008,ST1012 the copied declarations stay as the standard library has them
+
 package htt_test
 
 import (

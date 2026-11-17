@@ -1,0 +1,104 @@
+# Concourse pipeline for htt.
+#
+#	fly -t pop-os set-pipeline -p htt -c ci/pipeline.yml
+#
+# The jobs run the scripts in this directory, which also run on a laptop.
+
+resources:
+  - name: htt
+    type: git
+    icon: github
+    source:
+      uri: https://github.com/typelate/htt.git
+      branch: main
+
+  - name: muxt
+    type: git
+    icon: github
+    source:
+      uri: https://github.com/typelate/muxt.git
+      branch: main
+
+  - name: go-image
+    type: registry-image
+    icon: docker
+    check_every: 24h
+    source:
+      repository: golang
+      tag: "1.27"
+      username: crhntr
+      password: ((docker-pat))
+
+# Each task keeps Go's module and build caches in the gopath cache.
+go-env: &go-env |
+  export GOPATH="$(cd .. && pwd)/gopath"
+  export GOCACHE="$GOPATH/build-cache"
+
+jobs:
+  - name: test
+    plan:
+      - in_parallel:
+          fail_fast: true
+          steps:
+            - get: htt
+              trigger: true
+            - get: go-image
+              trigger: true
+      - task: test
+        image: go-image
+        config:
+          platform: linux
+          inputs: [{name: htt}]
+          caches: [{path: gopath}]
+          params: {GO_ENV: *go-env}
+          run:
+            dir: htt
+            path: sh
+            args: [-ec, 'eval "$GO_ENV"; exec ci/test.sh']
+
+  - name: fuzz
+    plan:
+      - in_parallel:
+          fail_fast: true
+          steps:
+            - get: htt
+              trigger: true
+              passed: [test]
+            - get: go-image
+              passed: [test]
+      - task: fuzz
+        image: go-image
+        config:
+          platform: linux
+          inputs: [{name: htt}]
+          caches: [{path: gopath}]
+          params: {GO_ENV: *go-env, FUZZTIME: 30s}
+          run:
+            dir: htt
+            path: sh
+            args: [-ec, 'eval "$GO_ENV"; exec ci/fuzz.sh']
+
+  # muxt imports htt and holds tests of htt's parser and diagnostics.
+  - name: muxt
+    plan:
+      - in_parallel:
+          fail_fast: true
+          steps:
+            - get: htt
+              trigger: true
+              passed: [test]
+            - get: muxt
+              trigger: true
+            - get: go-image
+              passed: [test]
+      - task: muxt-tests
+        image: go-image
+        config:
+          platform: linux
+          inputs: [{name: htt}, {name: muxt}]
+          caches: [{path: gopath}]
+          params: {GO_ENV: *go-env}
+          run:
+            dir: htt
+            path: sh
+            args: [-ec, 'eval "$GO_ENV"; exec ci/downstream.sh ../muxt -race']
