@@ -2,11 +2,14 @@
 // written for html/template can run on trees that keep positions and count
 // coverage.
 //
-// Its output must not be served: the engine's escaping is weaker than
-// html/template's (see htt.ExecuteTemplate).
+// Execute escapes with a port of html/template's escaper, run over a
+// text-mode parse of the same source, so the output and the escaping
+// errors are html/template's. The port is checked against the standard
+// library's escaping and error tables and nothing more: do not serve its
+// output.
 //
 // The safe-content types are this package's own. Values of html/template's
-// content types are trusted as well.
+// content types are recognized as well.
 //
 // When the environment variable named by CoverEnv holds a directory as the
 // process starts, each Execute appends the blocks it reaches to a cover

@@ -6,13 +6,15 @@ It was factored out of [muxt](https://github.com/typelate/muxt), which uses it t
 
 ## Status: do not serve its output yet
 
-Render pages for a browser with the standard library's `html/template`. htt runs templates so that tests and tools can see what a template produces and which parts of it ran. Its contextual escaping is not yet equivalent to `html/template`'s. The documentation of [`ExecuteTemplate`](https://pkg.go.dev/github.com/typelate/htt#ExecuteTemplate) lists the known differences, for example:
+Render pages for a browser with the standard library's `html/template`. htt runs templates so that tests and tools can see what a template produces and which parts of it ran.
+
+`htt/template` escapes with a port of `html/template`'s escaper. On the standard library's own escaping and error test tables, its output and its errors are `html/template`'s. Nothing beyond those tables has checked it, so treat its output as test data. The aim is a `htt/template` you can serve from.
+
+The root package's [`ExecuteTemplate`](https://pkg.go.dev/github.com/typelate/htt#ExecuteTemplate) is a different engine when its tree has HTML structure. It escapes less than `html/template` does, and its documentation lists the known differences, for example:
 
 - An action in attribute-name position, such as `<div {{.Name}}="x">`, is written as escaped text instead of a tag with a filtered attribute name.
 - A text template called from an HTML template runs without the caller's escaping context.
 - The value of a `style` or `srcdoc` attribute is not escaped for the CSS or HTML document it holds.
-
-The aim is to close every difference and make `htt/template` a package you can serve from. Until then, treat its output as test data.
 
 The API carries no compatibility promise; any release may change it.
 

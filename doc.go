@@ -6,9 +6,10 @@
 // actions, and each {{define}} and {{block}} stays where it was written.
 // Package template puts html/template's API over the same engine.
 //
-// Execution serves analysis, tests and coverage. Its contextual escaping
-// is weaker than html/template's (see [ExecuteTemplate]), so its output
-// must not be served to a browser.
+// Execution serves analysis, tests and coverage. Given a tree with HTML
+// structure, its contextual escaping is weaker than html/template's (see
+// [ExecuteTemplate]), so its output must not be served to a browser.
+// Package template escapes with a port of html/template's escaper instead.
 //
 // The API carries no compatibility promise.
 //

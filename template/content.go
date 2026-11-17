@@ -1,8 +1,8 @@
 package template
 
 // The content types are this package's own: it can be built in place of
-// html/template, so it cannot import it. trustOf trusts html/template's
-// types as well.
+// html/template, so it cannot import it. The escapers recognize
+// html/template's types as well.
 
 import "strconv"
 
