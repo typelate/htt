@@ -75,7 +75,8 @@ func planPipeline(p *htt.PipeNode, escapers []string) htt.ActionEdit {
 			}
 			// A lone escaper that is not dropped is called with its
 			// arguments, none for {{html}}, as html/template calls it.
-			edit.EvalArgs = n == 1 && (len(last.Args) > 1 || dup)
+			givenArgs := len(last.Args) > 1
+			edit.EvalArgs = n == 1 && (givenArgs || dup)
 			switch {
 			case dup && !edit.EvalArgs:
 				edit.Drop = 1
