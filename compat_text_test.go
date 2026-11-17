@@ -941,7 +941,6 @@ const (
 	causeArgConv      = "call arguments are not converted: int constant to uint16, pointer to or from value"
 	causeRangeIter    = "range does not accept iter.Seq or iter.Seq2"
 	causeRangeInt     = "range over a sized integer yields int values"
-	causeVarScope     = "variable declaration or shadowing scope differs"
 	causeStringer     = "String and Error are not found through an addressable value when printing"
 	causePrintPtr     = "a pointer is not dereferenced when printed or passed to html"
 	causeHTMLNil      = "html of an invalid value prints <nil>, not <no value>"
@@ -995,14 +994,11 @@ var execDivergences = map[string]string{
 	"range uint64":                     causeRangeInt,
 	"range uint":                       causeRangeInt,
 	"range uintptr":                    causeRangeInt,
-	"nested assignment changes the last declaration": causeVarScope,
-	"declare in range":  causeVarScope,
-	"if $x with $x int": causeVarScope,
-	"V{6666}.String()":  causeStringer,
-	"W{888}.Error()":    causeStringer,
-	"empty with struct": causePrintPtr,
-	"html #2":           causePrintPtr,
-	"html untyped nil":  causeHTMLNil,
+	"V{6666}.String()":                 causeStringer,
+	"W{888}.Error()":                   causeStringer,
+	"empty with struct":                causePrintPtr,
+	"html #2":                          causePrintPtr,
+	"html untyped nil":                 causeHTMLNil,
 }
 
 func TestCompatTextExecTests(t *testing.T) {

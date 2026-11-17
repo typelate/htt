@@ -284,6 +284,8 @@ func (s *state) walkWithNode(dot reflect.Value, n *WithNode) error {
 
 func (s *state) walkBranch(dot reflect.Value, branch *BranchNode, name string) error {
 	branch.openCount.Add(1)
+	mark := len(s.vars)
+	defer func() { s.vars = s.vars[:mark] }()
 	pipe, err := s.evalPipeline(dot, branch.Pipe)
 	if err != nil {
 		return err
@@ -330,6 +332,7 @@ func (s *state) walkRangeNode(dot reflect.Value, r *RangeNode) error {
 			lastTrim = r.ElseTrimLeft
 		}
 		err := s.walkList(elem, r.List, r.StartTrimRight, lastTrim)
+		s.vars = s.vars[:mark]
 		if isBreak(err) {
 			return true, nil
 		}
@@ -1184,6 +1187,8 @@ func (s *state) walkHTMLWith(dot reflect.Value, n *WithNode) ([]*html.Node, erro
 
 func (s *state) walkHTMLBranch(dot reflect.Value, branch *BranchNode, name string) ([]*html.Node, error) {
 	branch.openCount.Add(1)
+	mark := len(s.vars)
+	defer func() { s.vars = s.vars[:mark] }()
 	pipe, err := s.evalPipeline(dot, branch.Pipe)
 	if err != nil {
 		return nil, err
@@ -1230,6 +1235,7 @@ func (s *state) walkHTMLRange(dot reflect.Value, r *RangeNode) ([]*html.Node, er
 			lastTrim = r.ElseTrimLeft
 		}
 		nodes, err := s.walkHTMLList(elem, r.List, r.StartTrimRight, lastTrim)
+		s.vars = s.vars[:mark]
 		result = append(result, nodes...)
 		if isBreak(err) {
 			return true, nil
@@ -1375,6 +1381,8 @@ func (s *state) walkHTMLNodes(dot reflect.Value, nodes []Node, trimFirst, trimLa
 // attributes.
 func (s *state) walkHTMLAttrBranch(dot reflect.Value, branch *BranchNode, name string) ([]sourceAttr, error) {
 	branch.openCount.Add(1)
+	mark := len(s.vars)
+	defer func() { s.vars = s.vars[:mark] }()
 	pipe, err := s.evalPipeline(dot, branch.Pipe)
 	if err != nil {
 		return nil, err
@@ -1413,6 +1421,7 @@ func (s *state) walkHTMLAttrRange(dot reflect.Value, r *RangeNode) ([]sourceAttr
 	ran, err := s.rangeOver(val, func(index, elem reflect.Value) (bool, error) {
 		s.setRangeVars(r.Pipe, index, elem)
 		attrs, err := s.walkHTMLAttrList(elem, r.List)
+		s.vars = s.vars[:mark]
 		if err != nil {
 			return false, err
 		}
