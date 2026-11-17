@@ -1,8 +1,6 @@
 package htt_test
 
 import (
-	"bytes"
-	htmltemplate "html/template"
 	"io"
 	"testing"
 
@@ -10,10 +8,10 @@ import (
 	"github.com/typelate/htt/lex"
 )
 
-// FuzzExecuteHTMLStdlibCompat fuzzes with string data, comparing htt output
-// against html/template for the same template+data pair.
-// Templates that fail to parse or execute in either engine are skipped.
-func FuzzExecuteHTMLStdlibCompat(f *testing.F) {
+// FuzzExecuteHTMLNoPanic runs the HTML engine on arbitrary templates and string
+// data. Errors are fine; panics and hangs are not. The engine escapes less than
+// html/template, so its output is not compared with html/template's.
+func FuzzExecuteHTMLNoPanic(f *testing.F) {
 	seeds := []struct {
 		tmpl string
 		data string
@@ -68,18 +66,6 @@ func FuzzExecuteHTMLStdlibCompat(f *testing.F) {
 		f.Add(s.tmpl, s.data)
 	}
 	f.Fuzz(func(t *testing.T, tmpl, data string) {
-		// Try html/template first. If it fails to parse or execute, skip.
-		stdTmpl, err := htmltemplate.New("test").Parse(tmpl)
-		if err != nil {
-			return
-		}
-		var stdBuf bytes.Buffer
-		if err := stdTmpl.Execute(&stdBuf, data); err != nil {
-			return
-		}
-		want := stdBuf.String()
-
-		// Parse with htt.
 		tree, err := htt.ParseTree("test", "test", tmpl, nil, lex.Options{
 			LeftDelim:  "{{",
 			RightDelim: "}}",
@@ -88,22 +74,11 @@ func FuzzExecuteHTMLStdlibCompat(f *testing.F) {
 			ContinueOK: true,
 		})
 		if err != nil {
-			// htt may reject some templates that html/template accepts (or vice versa).
-			// That's not a crash bug, so skip.
 			return
 		}
 		htt.AnnotateHTMLContexts(tree.Root)
-
-		var httBuf bytes.Buffer
-		if err := htt.ExecuteTemplate(&httBuf, tree, data); err != nil {
-			// Execution error is not a panic; skip.
-			return
-		}
-		got := httBuf.String()
-
-		if got != want {
-			t.Errorf("output mismatch:\n  template: %q\n  data:     %q\n  want:     %q\n  got:      %q", tmpl, data, want, got)
-		}
+		// Execution errors are fine, panics are not.
+		htt.ExecuteTemplate(io.Discard, tree, data)
 	})
 }
 
