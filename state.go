@@ -400,6 +400,9 @@ func (s *state) walkRangeNode(dot reflect.Value, r *RangeNode) error {
 		if val.IsNil() {
 			break
 		}
+		if val.Type().ChanDir() == reflect.SendDir {
+			return s.errorf("range over send-only channel %v", val)
+		}
 		i, received := 0, false
 		for {
 			elem, ok := val.Recv()
@@ -1505,6 +1508,9 @@ func (s *state) walkHTMLRange(dot reflect.Value, r *RangeNode) ([]*html.Node, er
 		if val.IsNil() {
 			break
 		}
+		if val.Type().ChanDir() == reflect.SendDir {
+			return nil, s.errorf("range over send-only channel %v", val)
+		}
 		i, received := 0, false
 		for {
 			elem, ok := val.Recv()
@@ -1787,6 +1793,9 @@ func (s *state) walkHTMLAttrRange(dot reflect.Value, r *RangeNode) ([]sourceAttr
 	case reflect.Chan:
 		if val.IsNil() {
 			break
+		}
+		if val.Type().ChanDir() == reflect.SendDir {
+			return nil, s.errorf("range over send-only channel %v", val)
 		}
 		i := 0
 		for {
