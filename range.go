@@ -5,7 +5,7 @@ import "reflect"
 // rangeOver iterates val as {{range}} does and calls each once per
 // element. each reports stop to end the loop early. ran is false when val
 // held nothing, which is when the else list runs.
-func (s *state) rangeOver(val reflect.Value, each func(index, elem reflect.Value) (stop bool, err error)) (ran bool, err error) {
+func (s *state) rangeOver(val reflect.Value, vars int, each func(index, elem reflect.Value) (stop bool, err error)) (ran bool, err error) {
 	switch val.Kind() {
 	case reflect.Array, reflect.Slice:
 		if val.Len() == 0 {
@@ -58,6 +58,9 @@ func (s *state) rangeOver(val reflect.Value, each func(index, elem reflect.Value
 			}
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if vars > 1 {
+			return false, s.errorf("can't use %v to iterate over more than one variable", val)
+		}
 		count := val.Int()
 		if count <= 0 {
 			return false, nil
@@ -73,6 +76,9 @@ func (s *state) rangeOver(val reflect.Value, each func(index, elem reflect.Value
 		}
 		return true, nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		if vars > 1 {
+			return false, s.errorf("can't use %v to iterate over more than one variable", val)
+		}
 		count := val.Uint()
 		if count == 0 {
 			return false, nil

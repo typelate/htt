@@ -332,7 +332,7 @@ func (s *state) walkRangeNode(dot reflect.Value, r *RangeNode) error {
 	}
 	val, _ = indirect(val)
 	mark := len(s.vars)
-	ran, err := s.rangeOver(val, func(index, elem reflect.Value) (bool, error) {
+	ran, err := s.rangeOver(val, len(r.Pipe.Decl), func(index, elem reflect.Value) (bool, error) {
 		s.setRangeVars(r.Pipe, index, elem)
 		lastTrim := bodyLastTrim(&r.BranchNode)
 		err := s.walkList(elem, r.List, r.StartTrimRight, lastTrim)
@@ -1229,7 +1229,7 @@ func (s *state) walkHTMLRange(dot reflect.Value, r *RangeNode) ([]*html.Node, er
 	val, _ = indirect(val)
 	mark := len(s.vars)
 	var result []*html.Node
-	ran, err := s.rangeOver(val, func(index, elem reflect.Value) (bool, error) {
+	ran, err := s.rangeOver(val, len(r.Pipe.Decl), func(index, elem reflect.Value) (bool, error) {
 		s.setRangeVars(r.Pipe, index, elem)
 		lastTrim := bodyLastTrim(&r.BranchNode)
 		nodes, err := s.walkHTMLList(elem, r.List, r.StartTrimRight, lastTrim)
@@ -1416,7 +1416,7 @@ func (s *state) walkHTMLAttrRange(dot reflect.Value, r *RangeNode) ([]sourceAttr
 	val, _ = indirect(val)
 	mark := len(s.vars)
 	var result []sourceAttr
-	ran, err := s.rangeOver(val, func(index, elem reflect.Value) (bool, error) {
+	ran, err := s.rangeOver(val, len(r.Pipe.Decl), func(index, elem reflect.Value) (bool, error) {
 		s.setRangeVars(r.Pipe, index, elem)
 		attrs, err := s.walkHTMLAttrList(elem, r.List)
 		s.vars = s.vars[:mark]

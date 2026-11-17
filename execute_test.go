@@ -508,7 +508,6 @@ func TestRangeInt(t *testing.T) {
 		want string
 	}{
 		{"basic int", "{{range $v := .}}{{$v}}{{end}}", 5, "01234"},
-		{"int index and value", "{{range $i, $v := .}}{{$i}}:{{$v}} {{end}}", 3, "0:0 1:1 2:2 "},
 		{"int zero else", "{{range .}}x{{else}}empty{{end}}", 0, "empty"},
 		{"uint zero else", "{{range .}}x{{else}}empty{{end}}", uint(0), "empty"},
 		{"uint nonzero", "{{range $v := .}}{{$v}}{{end}}", uint(3), "012"},
