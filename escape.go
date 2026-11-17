@@ -408,31 +408,3 @@ func loadJSEventAttrs() map[string]struct{} {
 func EscapeJS(s string) string {
 	return escapeJS(s)
 }
-
-// EscapeCSS escapes s for style content.
-func EscapeCSS(s string) string {
-	return escapeCSSText(s)
-}
-
-// FilterURL returns s, or "#ZgotmplZ" when s has a scheme other than
-// http, https or mailto.
-func FilterURL(s string) string {
-	return filterURL(s)
-}
-
-// IsURLAttr reports whether the escaper filters values of the named
-// attribute as URLs.
-func IsURLAttr(attr string) bool {
-	return isURLAttr(attr)
-}
-
-// IsJSEventAttr reports whether the escaper escapes values of the named
-// attribute as JavaScript.
-func IsJSEventAttr(attr string) bool {
-	return isJSEventAttr(attr)
-}
-
-// FilterSrcset applies FilterURL to each URL of a srcset value.
-func FilterSrcset(s string) string {
-	return filterSrcset(s)
-}

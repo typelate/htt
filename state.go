@@ -75,7 +75,7 @@ func (s *state) trustOf(v reflect.Value) Trust {
 }
 
 func (s *state) execute(dot reflect.Value) error {
-	s.cp.Init(s.tree)
+	s.cp.AddTree(s.tree)
 	root := s.tree.Root
 	if root == nil {
 		return nil
@@ -1295,7 +1295,7 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 		rawText:       s.rawText || s.attrSource != nil,
 		escapableText: s.escapableText,
 	}
-	s.cp.Init(tree)
+	s.cp.AddTree(tree)
 	root := tree.Root
 	if root == nil {
 		return nil, nil

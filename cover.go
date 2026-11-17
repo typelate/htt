@@ -35,11 +35,6 @@ func (cp *CoverProfile) AddTree(tree *Tree) {
 	cp.trees = append(cp.trees, tree)
 }
 
-// Init adds tree to the profile, as AddTree does.
-func (cp *CoverProfile) Init(tree *Tree) {
-	cp.AddTree(tree)
-}
-
 type coverBlock struct {
 	parseName           string
 	startLine, startCol int

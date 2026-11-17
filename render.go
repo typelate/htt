@@ -311,18 +311,6 @@ func isVoidElement(tag string) bool {
 	return false
 }
 
-// IsVoidElement reports whether the named element is void: it has no
-// content and no end tag.
-func IsVoidElement(tag string) bool {
-	return isVoidElement(tag)
-}
-
-// IsRawTextElement reports whether the named element is script or style,
-// whose text is written unescaped.
-func IsRawTextElement(tag string) bool {
-	return isRawTextElement(tag)
-}
-
 // changesTextContext reports whether a browser reads what follows the
 // named element's start tag as something other than HTML text. Such an
 // element always gets its end tag, even where the source leaves it out,
