@@ -280,6 +280,14 @@ func appendBlock(tree *Tree, blocks []coverBlock, start, end lex.Pos, count *ato
 		return blocks
 	}
 	startPos := tree.PositionAt(start)
+	// A profile line needs a file name: cover.ParseProfiles rejects the
+	// whole profile for one blank name. A tree with no ParseName, such as
+	// template.New("").Parse, has no file to report coverage against. The
+	// block is skipped here, in the walk both writers share, rather than at
+	// AddTree, because the name can be set after a tree is registered.
+	if startPos.ParseName == "" {
+		return blocks
+	}
 	endPos := tree.PositionAt(end)
 	return append(blocks, coverBlock{
 		parseName: startPos.ParseName,

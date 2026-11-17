@@ -348,6 +348,40 @@ func TestCoverProfileWriteNewlyCovered(t *testing.T) {
 	})
 }
 
+// A profile line with an empty file name makes cover.ParseProfiles reject
+// the whole file, so trees parsed with template.New("") must write no lines.
+func TestCoverProfileOmitsUnnamedTrees(t *testing.T) {
+	for _, tc := range []struct {
+		name, tmpl string
+		mode       parseMode
+	}{
+		{"text", "{{if .}}yes{{end}}", parseModeText},
+		{"html", "<p>{{.}}</p>", parseModeHTML},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var tree *htt.Tree
+			if tc.mode == parseModeHTML {
+				tree = parseHTML(t, "", tc.tmpl)
+			} else {
+				tree = parseText(t, "", tc.tmpl)
+			}
+			tree.ParseName = "" // what the template package sets for template.New("")
+			var cp htt.CoverProfile
+			require.NoError(t, htt.ExecuteTemplate(io.Discard, tree, true, htt.WithCoverProfile(&cp)))
+
+			var buf bytes.Buffer
+			_, err := cp.WriteTo(&buf)
+			require.NoError(t, err)
+			assert.Equal(t, "mode: set\n", buf.String(), "WriteTo")
+
+			buf.Reset()
+			_, err = cp.WriteNewlyCovered(&buf, map[string]struct{}{})
+			require.NoError(t, err)
+			assert.Equal(t, "", buf.String(), "WriteNewlyCovered")
+		})
+	}
+}
+
 type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
