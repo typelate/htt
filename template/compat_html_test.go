@@ -1216,21 +1216,6 @@ func errorString(err error) string {
 	return err.Error()
 }
 
-// causeKeywordPosition is the cause of a difference in the location prefix of
-// a {{break}} or {{continue}}: html/template locates the keyword, and this
-// package keeps only the offset of the {{ that opens the action.
-const causeKeywordPosition = "same error, the location prefix differs: a break or continue has no keyword offset"
-
-// causeTemplateNamePosition is the cause of a difference in the location prefix
-// of a {{template}}: html/template locates the name, and this package keeps
-// only the offset of the {{ that opens the action.
-const causeTemplateNamePosition = "same error, the location prefix differs: a template call has no name offset"
-
 // errorDivergences names the TestCompatHTMLErrors cases whose error strings
-// differ from html/template's, with the cause.
-var errorDivergences = map[string]string{
-	"{{range .Items}}<a{{if .X}}{{break}}{{end}}>{{end}}":                                                         causeKeywordPosition,
-	"{{range .Items}}<a{{if .X}}{{continue}}{{end}}>{{end}}":                                                      causeKeywordPosition,
-	"{{range .Items}}{{if .X}}{{break}}{{end}}<a{{if .Y}}{{continue}}{{end}}>{{if .Z}}{{continue}}{{end}}{{end}}": causeKeywordPosition,
-	`{{template "foo"}}`: causeTemplateNamePosition,
-}
+// differ from html/template's, with the cause. It is empty: every case matches.
+var errorDivergences = map[string]string{}

@@ -130,8 +130,7 @@ func (e *Error) locate(t *htt.Tree, pos lex.Pos) {
 
 // nodeStart returns the offset that text/template records for node, which is
 // where html/template locates an error on it. It returns false for a node
-// whose offset htt does not record: a {{break}} or {{continue}} keyword, and
-// the name of a {{template}}. htt keeps only the offset of the {{ for those.
+// whose offset htt does not record.
 // Changed: new.
 func nodeStart(node interface{ String() string }) (lex.Pos, bool) {
 	switch n := node.(type) {
@@ -143,6 +142,12 @@ func nodeStart(node interface{ String() string }) (lex.Pos, bool) {
 		return pipeStart(n.Pipe)
 	case *htt.WithNode:
 		return pipeStart(n.Pipe)
+	case *htt.BreakNode:
+		return n.KeywordStart(), true
+	case *htt.ContinueNode:
+		return n.KeywordStart(), true
+	case *htt.TemplateNode:
+		return n.NameStart(), true
 	}
 	return 0, false
 }

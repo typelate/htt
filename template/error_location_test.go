@@ -36,6 +36,14 @@ func TestErrorLocationsMatchHTMLTemplate(t *testing.T) {
 			"error inside a define that the page calls",
 			"<p>\n{{define \"row\"}}\n  {{if .X}}<a{{end}}\n{{end}}{{template \"row\" .}}",
 		},
+		{
+			"template call on line 2 after indentation",
+			"<p>\n  {{template \"missing\"}}",
+		},
+		{
+			"break refused on line 3 after indentation",
+			"<p>\n<p>\n  {{range .Items}}<a{{if .X}}{{break}}{{end}}>{{end}}",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
