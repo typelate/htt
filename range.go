@@ -65,16 +65,7 @@ func (s *state) rangeOver(val reflect.Value, vars int, each func(index, elem ref
 		if count <= 0 {
 			return false, nil
 		}
-		for i := int64(0); i < count; i++ {
-			stop, err := each(reflect.ValueOf(int(i)), reflect.ValueOf(i).Convert(val.Type()))
-			if err != nil {
-				return false, err
-			}
-			if stop {
-				break
-			}
-		}
-		return true, nil
+		return rangeCount(uint64(count), val.Type(), each)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		if vars > 1 {
 			return false, s.errorf("can't use %v to iterate over more than one variable", val)
@@ -83,16 +74,7 @@ func (s *state) rangeOver(val reflect.Value, vars int, each func(index, elem ref
 		if count == 0 {
 			return false, nil
 		}
-		for i := uint64(0); i < count; i++ {
-			stop, err := each(reflect.ValueOf(int(i)), reflect.ValueOf(i).Convert(val.Type()))
-			if err != nil {
-				return false, err
-			}
-			if stop {
-				break
-			}
-		}
-		return true, nil
+		return rangeCount(count, val.Type(), each)
 	case reflect.Func:
 		if val.Type().CanSeq2() {
 			ran := false
@@ -138,6 +120,22 @@ func (s *state) rangeOver(val reflect.Value, vars int, each func(index, elem ref
 	default:
 		return false, s.errorf("range can't iterate over %v", val)
 	}
+}
+
+// rangeCount calls each with the indexes 0 through n-1 and elements of
+// type typ. Callers rule out n == 0 first, because an empty range runs
+// the else list.
+func rangeCount(n uint64, typ reflect.Type, each func(index, elem reflect.Value) (stop bool, err error)) (bool, error) {
+	for i := uint64(0); i < n; i++ {
+		stop, err := each(reflect.ValueOf(int(i)), reflect.ValueOf(i).Convert(typ))
+		if err != nil {
+			return false, err
+		}
+		if stop {
+			break
+		}
+	}
+	return true, nil
 }
 
 // setRangeVars gives the range's declared or assigned variables the
