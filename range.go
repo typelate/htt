@@ -25,9 +25,8 @@ func (s *state) rangeOver(val reflect.Value, each func(index, elem reflect.Value
 		if val.Len() == 0 {
 			return false, nil
 		}
-		iter := val.MapRange()
-		for iter.Next() {
-			stop, err := each(iter.Key(), iter.Value())
+		for _, entry := range sortMap(val) {
+			stop, err := each(entry.key, entry.value)
 			if err != nil {
 				return false, err
 			}

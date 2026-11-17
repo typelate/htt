@@ -945,7 +945,6 @@ const (
 	causeStringer     = "String and Error are not found through an addressable value when printing"
 	causePrintPtr     = "a pointer is not dereferenced when printed or passed to html"
 	causeHTMLNil      = "html of an invalid value prints <nil>, not <no value>"
-	causeMapOrder     = "range over a map does not sort the keys"
 )
 
 // execDivergences maps a case name to why htt differs from text/template.
@@ -1004,8 +1003,6 @@ var execDivergences = map[string]string{
 	"empty with struct": causePrintPtr,
 	"html #2":           causePrintPtr,
 	"html untyped nil":  causeHTMLNil,
-	"range map":         causeMapOrder,
-	"range map else":    causeMapOrder,
 }
 
 func TestCompatTextExecTests(t *testing.T) {
