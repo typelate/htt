@@ -202,8 +202,9 @@ func (t *Tree) Delims() (left, right string) {
 }
 
 // PositionAt returns the line and column of a byte offset in the source.
+// An offset outside the source counts as its nearer end.
 func (t *Tree) PositionAt(pos lex.Pos) Position {
-	p := int(pos)
+	p := min(max(int(pos), 0), len(t.text))
 	text := t.text[:p]
 	lineNum := 1 + strings.Count(text, "\n")
 	lastNL := strings.LastIndex(text, "\n")
