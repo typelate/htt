@@ -31,8 +31,9 @@ func (s Severity) String() string {
 // DiagnosticCode names a class of finding. Codes are stable.
 type DiagnosticCode string
 
-// The diagnostic codes. The parser reports DiagOrphanEndTag and
-// DiagMisnestedTag; the others are for analyses built on the tree.
+// The codes for HTML structure. The parser reports DiagOrphanEndTag and
+// DiagMisnestedTag; the others are for analyses built on the tree. An
+// analysis of anything else declares its own codes.
 const (
 	DiagUnclosedElement DiagnosticCode = "unclosed-element"
 	DiagOrphanEndTag    DiagnosticCode = "orphan-end-tag"
@@ -42,14 +43,6 @@ const (
 	DiagAutoClosed      DiagnosticCode = "auto-closed"      // implied end tags (§13.2.6.3)
 	DiagNestedLink      DiagnosticCode = "nested-link"
 	DiagNestedButton    DiagnosticCode = "nested-button"
-
-	DiagUnknownCSSProperty DiagnosticCode = "unknown-css-property"
-	DiagInvalidCSSValue    DiagnosticCode = "invalid-css-value"
-	DiagUnknownCSSAtRule   DiagnosticCode = "unknown-css-at-rule"
-
-	DiagUndefinedCSSCustomProperty DiagnosticCode = "undefined-css-custom-property"
-	DiagUnusedCSSRule              DiagnosticCode = "unused-css-rule"
-	DiagUnusedCSSSelector          DiagnosticCode = "unused-css-selector"
 )
 
 // Diagnostic is a finding that does not stop the parse: a place where a
