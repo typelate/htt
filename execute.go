@@ -34,6 +34,8 @@ type config struct {
 	missingKey MissingKeyMode
 	cp         *CoverProfile
 	trust      TrustFunc
+	plan       Plan
+	instance   string
 }
 
 // MissingKeyMode says what a map lookup with a missing key evaluates to.
@@ -117,6 +119,8 @@ func ExecuteTemplate(w io.Writer, tree *Tree, data any, opts ...Option) error {
 		finder:     cfg.finder,
 		missingKey: cfg.missingKey,
 		trust:      cfg.trust,
+		plan:       cfg.plan,
+		instance:   cfg.instance,
 	}
 	s.vars = []variable{{"$", reflect.ValueOf(data)}}
 	return s.execute(reflect.ValueOf(data))
@@ -136,6 +140,8 @@ func ExecuteDocument(tree *Tree, data any, opts ...Option) (*html.Node, error) {
 		finder:     cfg.finder,
 		missingKey: cfg.missingKey,
 		trust:      cfg.trust,
+		plan:       cfg.plan,
+		instance:   cfg.instance,
 	}
 	dot := reflect.ValueOf(data)
 	s.vars = []variable{{"$", dot}}
@@ -164,6 +170,8 @@ func ExecuteElement(tree *Tree, elem *HTMLElementNode, data any, opts ...Option)
 		finder:     cfg.finder,
 		missingKey: cfg.missingKey,
 		trust:      cfg.trust,
+		plan:       cfg.plan,
+		instance:   cfg.instance,
 	}
 	s.vars = []variable{{"$", reflect.ValueOf(data)}}
 	return s.walkHTMLElement(reflect.ValueOf(data), elem)

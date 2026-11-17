@@ -26,6 +26,8 @@ type state struct {
 	finder     TreeFinder
 	missingKey MissingKeyMode
 	trust      TrustFunc
+	plan       Plan
+	instance   string
 	markup     *markup // what the source writes that html.Node cannot hold; nil records nothing
 	// attrSource is set while a control structure in an attribute value
 	// is walked. It holds the text nodes made from the template's own
@@ -268,6 +270,11 @@ func (s *state) walkAction(dot reflect.Value, action *ActionNode) error {
 		// Variable assignment/declaration — no output.
 		return nil
 	}
+	if s.plan != nil {
+		if edit, ok := s.plan.Action(s.instance, action); ok {
+			return s.writeEdit(val, edit)
+		}
+	}
 	if _, err := s.printValue(s.wr, val); err != nil {
 		return s.writeError(err)
 	}
@@ -388,6 +395,8 @@ func (s *state) walkTemplateNode(dot reflect.Value, t *TemplateNode) error {
 		finder:     s.finder,
 		missingKey: s.missingKey,
 		trust:      s.trust,
+		plan:       s.plan,
+		instance:   s.instance,
 		vars:       []variable{{"$", newDot}},
 	}
 	return newState.execute(newDot)
