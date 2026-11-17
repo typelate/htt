@@ -472,11 +472,18 @@ func (e *escaper) escapeTree(c context, node htt.Node, name string, line int) (c
 		// Already escaped.
 		return out, dname
 	}
-	t := e.trees[name]
-	if t == nil {
+	t, defined := e.trees[name]
+	if !defined {
 		return context{
 			state: stateError,
 			err:   errorf(ErrNoSuchTemplate, node, line, "no such template %q", name),
+		}, dname
+	}
+	if t == nil {
+		// Changed: defined from a tree with HTML structure, which has no text form.
+		return context{
+			state: stateError,
+			err:   errorf(ErrNoSuchTemplate, node, line, "%q was added from a tree with HTML structure and has no text form to escape", name),
 		}, dname
 	}
 	return e.computeOutCtx(c, dname, t), dname

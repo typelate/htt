@@ -54,7 +54,8 @@ type common struct {
 	rightDelim string
 
 	// shadow is the same source as the trees of tmpl, parsed as text, by
-	// template name. A template added with AddParseTree has its tree as text.
+	// template name. A template added from a tree with HTML structure is nil:
+	// it has no text form to escape.
 	shadow map[string]*htt.Tree
 	// esc holds the plans made from shadow. Anything that changes the
 	// templates replaces it.
@@ -241,15 +242,16 @@ func (t *Template) parseShadow(text string, replaced map[string]bool) error {
 }
 
 // AddParseTree adds tree to t's set under name and returns its template.
-// tree must be parsed without HTML structure; it is escaped as html/template
-// escapes a parse tree added that way. An empty tree does not replace a
-// definition.
+// A tree parsed without HTML structure is escaped as html/template escapes a
+// parse tree added that way. A tree with HTML structure is kept for
+// inspection and annotated in place; executing it is an error. An empty tree
+// does not replace a definition.
 func (t *Template) AddParseTree(name string, tree *htt.Tree) (*Template, error) {
 	if tree.HTMLMode {
-		return nil, fmt.Errorf("html/template: AddParseTree %q: the tree must be parsed without HTML structure", name)
+		htt.AnnotateHTMLContexts(tree.Root)
 	}
 	tmpl, replaced := t.addTree(name, tree)
-	if replaced {
+	if replaced && !tree.HTMLMode {
 		t.common.shadow[name] = tree
 	}
 	t.common.esc = new(escapeSet)
@@ -271,8 +273,8 @@ func (t *Template) addTree(name string, tree *htt.Tree) (*Template, bool) {
 	replaced := tmpl.Tree == nil || !htt.IsEmptyTree(tree.Root)
 	if replaced {
 		tmpl.Tree = tree
-		// There is no source to parse as text for this tree.
-		delete(t.common.shadow, name)
+		// A nil shadow marks a template defined with no text form to escape.
+		t.common.shadow[name] = nil
 	}
 	return tmpl, replaced
 }
@@ -377,8 +379,8 @@ func (t *Template) ParseFS(fsys fs.FS, patterns ...string) (*Template, error) {
 // nothing is trusted here.
 func (t *Template) shadowOptions(plan *escapePlan, name string) []htt.Option {
 	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
-		tree, ok := t.common.shadow[name]
-		return tree, ok
+		tree := t.common.shadow[name]
+		return tree, tree != nil
 	})
 	return t.runOptions([]htt.Option{htt.WithPlan(plan, name)}, finder)
 }

@@ -72,19 +72,66 @@ func TestAddParseTreeCalledFromParsedTemplate(t *testing.T) {
 	assert.Equal(t, want.String(), buf.String())
 }
 
-func TestAddParseTreeRefusesAnHTMLTree(t *testing.T) {
-	tree, err := htt.ParseTree("page", "page", `<p>{{.}}</p>`, nil, lex.Options{
-		LeftDelim:  "{{",
-		RightDelim: "}}",
-		ParseHTML:  true,
-	})
+func TestAddParseTreeKeepsAnHTMLTreeForInspection(t *testing.T) {
+	set := htt.New[any]("index")
+	_, err := set.Parse(`<h1>x</h1>{{define "row"}}<td>{{.}}</td>{{end}}`)
 	require.NoError(t, err)
 
-	tmpl := template.New("main")
-	_, err = tmpl.AddParseTree("page", tree)
+	out := template.New("index")
+	for _, name := range set.Names() {
+		tree, ok := set.FindTree(name)
+		require.True(t, ok, name)
+		_, err := out.AddParseTree(name, tree)
+		require.NoError(t, err)
+	}
+
+	row := out.Lookup("row")
+	require.NotNil(t, row)
+	var names []string
+	for _, tmpl := range out.Templates() {
+		names = append(names, tmpl.Name())
+	}
+	assert.ElementsMatch(t, []string{"index", "row"}, names)
+
+	rowTree, ok := set.FindTree("row")
+	require.True(t, ok)
+	assert.Same(t, rowTree, row.Tree)
+	assert.True(t, row.Tree.HTMLMode)
+	var annotated bool
+	htt.Walk(row.Tree, func(_ *htt.Tree, n htt.Node) {
+		if action, ok := n.(*htt.ActionNode); ok && action.HTMLContext != nil {
+			annotated = true
+		}
+	})
+	assert.True(t, annotated, "an action of the tree has an HTML context")
+}
+
+func TestExecuteOfAnAddedHTMLTreeSaysWhy(t *testing.T) {
+	set := htt.New[any]("index")
+	_, err := set.Parse(`{{define "row"}}<td>{{.}}</td>{{end}}`)
+	require.NoError(t, err)
+	rowTree, ok := set.FindTree("row")
+	require.True(t, ok)
+
+	tmpl := template.New("index")
+	_, err = tmpl.AddParseTree("row", rowTree)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	err = tmpl.ExecuteTemplate(&buf, "row", "x")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parsed without HTML structure")
-	assert.Nil(t, tmpl.Lookup("page"), "the set is unchanged")
+	assert.Contains(t, err.Error(), `"row"`)
+	assert.Contains(t, err.Error(), "no text form")
+	assert.Empty(t, buf.String())
+
+	_, err = tmpl.Parse(`<p>{{template "row" .}}</p>`)
+	require.NoError(t, err)
+	buf.Reset()
+	err = tmpl.Execute(&buf, "x")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"row"`)
+	assert.Contains(t, err.Error(), "no text form")
+	assert.Empty(t, buf.String())
 }
 
 // htmlTemplateAdded returns html/template's output for the text added as
