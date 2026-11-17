@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
-	"golang.org/x/net/html/atom"
 )
 
 type variable struct {
@@ -2002,6 +2001,3 @@ func isContinue(err error) bool {
 	_, ok := err.(continueError)
 	return ok
 }
-
-// Unused import suppression removed — atom is used in walkHTMLElement.
-var _ = atom.Lookup
