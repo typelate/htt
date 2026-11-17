@@ -67,9 +67,12 @@ type escaper struct {
 	// actionNodeEdits are the accumulated edits to apply during commit.
 	// Such edits are not applied immediately in case a template set
 	// executes a given template in different escaping contexts.
-	// Changed: keyed by instance and node; derived and the template and
-	// text node edits are not needed yet.
+	// Changed: keyed by instance and node; derived and the template node
+	// edits are not needed yet.
 	actionNodeEdits map[planKey][]string
+	// textNodeEdits are the text that replaces a text node, by instance and
+	// node, for the escaper's text the escaper rewrote. Changed: new.
+	textNodeEdits map[planKey][]byte
 	// rangeContext holds context about the current range loop.
 	rangeContext *rangeContext
 	// unsupported says why the plan cannot be used yet, or is empty. Changed: new.
@@ -90,6 +93,7 @@ func makeEscaper(trees map[string]*htt.Tree) escaper {
 		output:          map[string]context{},
 		called:          map[string]bool{},
 		actionNodeEdits: map[planKey][]string{},
+		textNodeEdits:   map[planKey][]byte{},
 	}
 }
 
@@ -468,6 +472,9 @@ func (e *escaper) escapeListConditionally(c context, n *htt.ListNode, trimFirst,
 		for k, v := range e1.actionNodeEdits {
 			e.editActionNode(k, v)
 		}
+		for k, v := range e1.textNodeEdits {
+			e.editTextNode(k, v)
+		}
 		if e1.unsupported != "" {
 			e.unsupportedBecause(e1.unsupported)
 		}
@@ -599,7 +606,7 @@ var doctypeBytes = []byte("<!DOCTYPE")
 
 // escapeText escapes a text template node.
 // Changed: text is the node's text with its trim markers applied, since the
-// parser does not trim it; n names the node for the edit the next leaf records.
+// parser does not trim it; n keys the edit that replaces its text.
 func (e *escaper) escapeText(c context, n *htt.TextNode, text []byte) context {
 	s, written, i, b := text, 0, 0, new(bytes.Buffer)
 	for i != len(s) {
@@ -670,9 +677,8 @@ func (e *escaper) escapeText(c context, n *htt.TextNode, text []byte) context {
 		if !isComment(c.state) || c.delim != delimNone {
 			b.Write(text[written:])
 		}
-		// UNSUPPORTED: the escaper rewrites this text. Plan.Text will carry
-		// b.Bytes() once such nodes are planned.
-		e.unsupportedBecause("the escaper rewrites a text node")
+		// The executor writes this in place of n, so it is not trimmed again.
+		e.editTextNode(planKey{e.instance, n}, b.Bytes())
 	}
 	return c
 }
@@ -738,6 +744,15 @@ func contextAfterText(c context, s []byte) (context, int) {
 	// On exiting an attribute, we discard all state information
 	// except the state and element.
 	return context{state: stateTag, element: element}, i
+}
+
+// editTextNode records a change to a text node for later commit.
+// Changed: the key names the instance as well as the node.
+func (e *escaper) editTextNode(k planKey, text []byte) {
+	if _, ok := e.textNodeEdits[k]; ok {
+		panic(fmt.Sprintf("node %s shared between templates", k.node))
+	}
+	e.textNodeEdits[k] = text
 }
 
 // editActionNode records a change to an action pipeline for later commit.

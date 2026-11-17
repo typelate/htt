@@ -24,11 +24,13 @@ type planKey struct {
 // not changed once made.
 type escapePlan struct {
 	actions map[planKey]htt.ActionEdit
+	texts   map[planKey][]byte
 }
 
-// Text writes every text node as it is: no rewrite is planned yet.
-func (p *escapePlan) Text(string, *htt.TextNode) ([]byte, bool) {
-	return nil, false
+// Text returns the text the escaper rewrote n to, already trimmed.
+func (p *escapePlan) Text(instance string, n *htt.TextNode) ([]byte, bool) {
+	text, ok := p.texts[planKey{instance, n}]
+	return text, ok
 }
 
 // Action returns the edit recorded for n in instance.
@@ -44,7 +46,7 @@ func (p *escapePlan) Call(string, htt.Node) string {
 
 // commit makes the plan of the edits e recorded.
 func (e *escaper) commit() *escapePlan {
-	p := &escapePlan{actions: make(map[planKey]htt.ActionEdit, len(e.actionNodeEdits))}
+	p := &escapePlan{actions: make(map[planKey]htt.ActionEdit, len(e.actionNodeEdits)), texts: e.textNodeEdits}
 	for k, escapers := range e.actionNodeEdits {
 		p.actions[k] = planPipeline(k.node.(*htt.ActionNode).Pipe, escapers)
 	}

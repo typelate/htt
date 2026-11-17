@@ -863,7 +863,6 @@ const (
 	causeCSSFilter   = "style values are not filtered as CSS (ZgotmplZ)"
 	causeCSSEncode   = "values in CSS strings and url() are not CSS- or percent-encoded"
 	causeComments    = "comments are kept and whitespace is not normalized"
-	causeScriptTags  = "<script and <!-- inside script literals are not escaped"
 	causeTypedHTML   = "typed HTML values are escaped where html/template strips tags or passes them through"
 	causeSrcset      = "srcset candidates are rewritten differently"
 	causeMetaContent = "a URL in a meta content attribute is not filtered"
@@ -914,24 +913,15 @@ var escapeDivergences = map[string]string{
 	"styleStrSpecialsEncoded":          causeCSSEncode,
 	"styleURLSpecialsEncoded":          causeCSSEncode,
 
-	"Split HTML comment":                                causeComments,
-	"JS line comment":                                   causeComments,
-	"JS multiline block comment":                        causeComments,
-	"JS single-line block comment":                      causeComments,
-	"JS block comment flush with mathematical division": causeComments,
-	"JS mixed comments":                                 causeComments,
-	"JS HTML-like comments":                             causeComments,
-	"JS hashbang comment":                               causeComments,
-	"CSS comments":                                      causeComments,
-	"JS attr block comment":                             causeComments,
-	"JS attr line comment":                              causeComments,
-	"CSS attr block comment":                            causeComments,
-	"CSS attr line comment":                             causeComments,
-	"Comment ends flush with start":                     causeComments,
-
-	"Special tags in <script> string literals":              causeScriptTags,
-	"Special tags in <script> string literals (mixed case)": causeScriptTags,
-	"Special tags in <script> regex literals (mixed case)":  causeScriptTags,
+	"JS line comment":               causeComments,
+	"JS multiline block comment":    causeComments,
+	"JS single-line block comment":  causeComments,
+	"CSS comments":                  causeComments,
+	"JS attr block comment":         causeComments,
+	"JS attr line comment":          causeComments,
+	"CSS attr block comment":        causeComments,
+	"CSS attr line comment":         causeComments,
+	"Comment ends flush with start": causeComments,
 
 	"typed HTML in attribute": causeTypedHTML,
 	"typed HTML in RCDATA":    causeTypedHTML,

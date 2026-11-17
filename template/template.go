@@ -211,26 +211,10 @@ func (t *Template) Parse(text string) (*Template, error) {
 		}
 		replaced[name] = tmpl.Tree == tr
 	}
-	// UNSUPPORTED: a text-mode parse keeps no node for a define, so it loses
-	// the trim markers on one. Without a shadow, the old engine runs.
-	if definesTrim(tree) {
-		return t, nil
-	}
 	if err := t.parseShadow(text, replaced); err != nil {
 		return nil, err
 	}
 	return t, nil
-}
-
-// definesTrim reports whether a {{define}} in tree has a trim marker.
-func definesTrim(tree *htt.Tree) bool {
-	found := false
-	htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
-		if d, ok := n.(*htt.DefineNode); ok {
-			found = found || d.StartTrimLeft || d.StartTrimRight || d.EndTrimLeft || d.EndTrimRight
-		}
-	})
-	return found
 }
 
 // parseShadow parses text as text, as Parse parsed it as HTML, and keeps

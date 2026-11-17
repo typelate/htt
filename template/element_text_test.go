@@ -54,8 +54,16 @@ func TestElementTextMatchesHTMLTemplate(t *testing.T) {
 			data: []string{"a+", "b"},
 		},
 
-		// The new path does not take these yet. They keep the output the
-		// old engine gives, which is checked below.
+		{name: "comment in an element", src: `<p>a<!-- note -->b{{.}}</p>`, data: "+"},
+		{name: "comment before an element", src: `<!-- lead --><p>{{.}}</p>`, data: "+"},
+		{name: "multi-line comment", src: "<!--\nline one\nline two\n--><p>{{.}}</p>", data: "+"},
+		{name: "JS comment in a script", src: `<script>/* note */ var x = 1;</script><p>{{.}}</p>`, data: "+"},
+		{name: "CSS comment in a style", src: `<style>/* note */ p { color: red }</style><p>{{.}}</p>`, data: "+"},
+		{
+			name: "trim markers on a define",
+			src:  "{{define \"u\" -}} <b>{{.}}</b> {{- end}}<p>{{template \"u\" .}}</p>",
+			data: "+",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			want := runHTMLTemplate(t, tt.src, tt.data)
@@ -81,7 +89,6 @@ func TestOldEngineStillRunsWhereTheEscaperIsNotUsed(t *testing.T) {
 		{name: "action in a URL query", src: `<a href="/x?q={{.}}">x</a>`, data: `a b+&`, want: `<a href="/x?q=a b&#43;&amp;">x</a>`},
 		{name: "action in a script", src: `<script>var x = {{.}};</script>`, data: `a<+`, want: "<script>var x = \"a\\u003c\\u002b\";</script>"},
 		{name: "html in a pipeline", src: `<p>{{. | html}}</p>`, data: `<+`, want: `<p>&amp;lt;+</p>`},
-		{name: "trim markers on a define", src: "{{define \"u\" -}} <b>{{.}}</b> {{- end}}<p>{{template \"u\" .}}</p>", data: `+`, want: `<p><b>+</b></p>`},
 		{name: "call from an attribute", src: `{{define "u"}}{{.}}{{end}}<a title="{{template "u" .}}">`, data: `+`, want: `<a title="">`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
