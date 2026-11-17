@@ -357,13 +357,6 @@ func (t *Template) ParseFS(fsys fs.FS, patterns ...string) (*Template, error) {
 }
 
 func (t *Template) execOptions() []htt.Option {
-	opts := []htt.Option{htt.WithTrust(trustOf)}
-	if t.common.funcMap != nil {
-		opts = append(opts, htt.WithFuncs(t.common.funcMap))
-	}
-	if t.common.missingKey != htt.MissingKeyInvalid {
-		opts = append(opts, htt.WithMissingKey(t.common.missingKey))
-	}
 	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
 		tmpl := t.common.tmpl[name]
 		if tmpl != nil && tmpl.Tree != nil {
@@ -371,25 +364,30 @@ func (t *Template) execOptions() []htt.Option {
 		}
 		return nil, false
 	})
-	opts = append(opts, htt.WithFinder(finder))
-	return opts
+	return t.runOptions([]htt.Option{htt.WithTrust(trustOf)}, finder)
 }
 
 // shadowOptions are the options to run the shadow tree of the template
 // named name under plan. The plan writes what html/template writes, so
 // nothing is trusted here.
 func (t *Template) shadowOptions(plan *escapePlan, name string) []htt.Option {
-	opts := []htt.Option{htt.WithPlan(plan, name)}
+	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
+		tree, ok := t.common.shadow[name]
+		return tree, ok
+	})
+	return t.runOptions([]htt.Option{htt.WithPlan(plan, name)}, finder)
+}
+
+// runOptions appends to first the options every run of t shares: its funcs,
+// its missing-key policy, and finder, which names the trees a run may call.
+func (t *Template) runOptions(first []htt.Option, finder htt.FindTreeFunc) []htt.Option {
+	opts := first
 	if t.common.funcMap != nil {
 		opts = append(opts, htt.WithFuncs(t.common.funcMap))
 	}
 	if t.common.missingKey != htt.MissingKeyInvalid {
 		opts = append(opts, htt.WithMissingKey(t.common.missingKey))
 	}
-	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
-		tree, ok := t.common.shadow[name]
-		return tree, ok
-	})
 	return append(opts, htt.WithFinder(finder))
 }
 
