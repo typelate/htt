@@ -436,30 +436,7 @@ func jsEscaper(args ...any) string {
 }
 
 func urlQueryEscaper(args ...any) string {
-	return urlEscape(fmt.Sprint(args...))
-}
-
-func urlEscape(s string) string {
-	var b strings.Builder
-	for _, c := range []byte(s) {
-		if shouldEscape(c) {
-			fmt.Fprintf(&b, "%%%02X", c)
-		} else {
-			b.WriteByte(c)
-		}
-	}
-	return b.String()
-}
-
-func shouldEscape(c byte) bool {
-	if 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z' || '0' <= c && c <= '9' {
-		return false
-	}
-	switch c {
-	case '-', '_', '.', '~':
-		return false
-	}
-	return true
+	return texttemplate.URLQueryEscaper(args...)
 }
 
 // prepareArg converts value to typ where it can.
