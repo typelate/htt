@@ -11,6 +11,8 @@ type Plan interface {
 	Text(instance string, n *TextNode) ([]byte, bool)
 	// Action returns how to write the value of n, or false to print it as it is.
 	Action(instance string, n *ActionNode) (ActionEdit, bool)
+	// Call returns the instance the template called at n runs as, or "" for the callee's own name.
+	Call(instance string, n Node) string
 }
 
 // ActionEdit pipes an action's value through Funcs in order and writes the result.

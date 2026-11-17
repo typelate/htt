@@ -166,7 +166,7 @@ func (s *state) walk(dot reflect.Value, node Node) error {
 	case *WithNode:
 		return s.walkWithNode(dot, n)
 	case *TemplateNode:
-		return s.walkTemplateNode(dot, n)
+		return s.walkTemplateNode(dot, n, n)
 	case *BreakNode:
 		n.count.Add(1)
 		return breakError{}
@@ -179,7 +179,7 @@ func (s *state) walk(dot reflect.Value, node Node) error {
 		// A definition writes nothing where it stands.
 	case *BlockNode:
 		// A block executes as a call of the template it defines.
-		return s.walkTemplateNode(dot, s.tree.newTemplate(n.Start(), n.End(), n.Line, n.Name, n.Pipe))
+		return s.walkTemplateNode(dot, s.tree.newTemplate(n.Start(), n.End(), n.Line, n.Name, n.Pipe), n)
 	default:
 		return s.errorf("unknown node: %s", node)
 	}
@@ -376,7 +376,9 @@ func (s *state) walkRangeNode(dot reflect.Value, r *RangeNode) error {
 	return nil
 }
 
-func (s *state) walkTemplateNode(dot reflect.Value, t *TemplateNode) error {
+// walkTemplateNode runs the template t calls. call is the node the plan
+// names the call by: t itself, or the block that made t.
+func (s *state) walkTemplateNode(dot reflect.Value, t *TemplateNode, call Node) error {
 	t.count.Add(1)
 	if s.depth >= maxExecDepth {
 		return s.errorf("exceeded maximum template depth (%d)", maxExecDepth)
@@ -396,6 +398,12 @@ func (s *state) walkTemplateNode(dot reflect.Value, t *TemplateNode) error {
 			return err
 		}
 	}
+	instance := t.Name
+	if s.plan != nil {
+		if name := s.plan.Call(s.instance, call); name != "" {
+			instance = name
+		}
+	}
 	newState := &state{
 		wr:         s.wr,
 		tree:       tree,
@@ -406,7 +414,7 @@ func (s *state) walkTemplateNode(dot reflect.Value, t *TemplateNode) error {
 		missingKey: s.missingKey,
 		trust:      s.trust,
 		plan:       s.plan,
-		instance:   s.instance,
+		instance:   instance,
 		vars:       []variable{{"$", newDot}},
 	}
 	return newState.execute(newDot)
