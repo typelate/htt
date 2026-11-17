@@ -18,7 +18,6 @@ package template
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -52,7 +51,7 @@ type common struct {
 	rightDelim string
 
 	// shadow is the same source as the trees of tmpl, parsed as text, by
-	// template name. A template added with AddParseTree has none.
+	// template name. A template added with AddParseTree has its tree as text.
 	shadow map[string]*htt.Tree
 	// esc holds the plans made from shadow. Anything that changes the
 	// templates replaces it.
@@ -205,11 +204,9 @@ func (t *Template) Parse(text string) (*Template, error) {
 	}
 	replaced := make(map[string]bool)
 	for name, tr := range htt.DefinedTrees(tree, treeSet) {
-		tmpl, err := t.AddParseTree(name, tr)
-		if err != nil {
-			return nil, err
-		}
-		replaced[name] = tmpl.Tree == tr
+		htt.AnnotateHTMLContexts(tr.Root)
+		_, ok := t.addTree(name, tr)
+		replaced[name] = ok
 	}
 	if err := t.parseShadow(text, replaced); err != nil {
 		return nil, err
@@ -241,10 +238,25 @@ func (t *Template) parseShadow(text string, replaced map[string]bool) error {
 }
 
 // AddParseTree adds tree to t's set under name and returns its template.
-// An empty tree does not replace a definition.
+// tree must be parsed without HTML structure; it is escaped as html/template
+// escapes a parse tree added that way. An empty tree does not replace a
+// definition.
 func (t *Template) AddParseTree(name string, tree *htt.Tree) (*Template, error) {
-	tree.HTMLMode = true
-	htt.AnnotateHTMLContexts(tree.Root)
+	if tree.HTMLMode {
+		return nil, fmt.Errorf("html/template: AddParseTree %q: the tree must be parsed without HTML structure", name)
+	}
+	tmpl, replaced := t.addTree(name, tree)
+	if replaced {
+		t.common.shadow[name] = tree
+	}
+	t.common.esc = new(escapeSet)
+	return tmpl, nil
+}
+
+// addTree adds tree to t's set under name, without a shadow, and reports
+// whether it replaced the template's tree. An empty tree does not replace a
+// definition.
+func (t *Template) addTree(name string, tree *htt.Tree) (*Template, bool) {
 	tmpl := t.common.tmpl[name]
 	if tmpl == nil {
 		tmpl = &Template{
@@ -253,13 +265,13 @@ func (t *Template) AddParseTree(name string, tree *htt.Tree) (*Template, error) 
 		}
 		t.common.tmpl[name] = tmpl
 	}
-	if tmpl.Tree == nil || !htt.IsEmptyTree(tree.Root) {
+	replaced := tmpl.Tree == nil || !htt.IsEmptyTree(tree.Root)
+	if replaced {
 		tmpl.Tree = tree
 		// There is no source to parse as text for this tree.
 		delete(t.common.shadow, name)
 	}
-	t.common.esc = new(escapeSet)
-	return tmpl, nil
+	return tmpl, replaced
 }
 
 // Clone returns a copy of t and its set. The trees are shared; templates
@@ -321,18 +333,11 @@ func (t *Template) execute(wr io.Writer, name string, data any) error {
 	if processCover != nil {
 		return processCover.execute(wr, tmpl.Tree, data, opts)
 	}
-	defined := func(n string) bool {
-		tmpl := t.common.tmpl[n]
-		return tmpl != nil && tmpl.Tree != nil
-	}
-	plan, err := t.common.esc.escapeTemplate(t.common.shadow, defined, name)
-	if err == nil {
-		return htt.ExecuteTemplate(wr, t.common.shadow[name], data, t.shadowOptions(plan, name)...)
-	}
-	if !errors.Is(err, errUnsupported) {
+	plan, err := t.common.esc.escapeTemplate(t.common.shadow, name)
+	if err != nil {
 		return err
 	}
-	return htt.ExecuteTemplate(wr, tmpl.Tree, data, opts...)
+	return htt.ExecuteTemplate(wr, t.common.shadow[name], data, t.shadowOptions(plan, name)...)
 }
 
 // ParseFiles parses the named files into t's set, each as a template named

@@ -179,9 +179,9 @@ func TestDynamicAttributeNameParses(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// --- New behavior: HTMLMode forced for shim trees ---
+// --- New behavior: a text tree added with AddParseTree is escaped ---
 
-func TestAddParseTreeForcesHTMLMode(t *testing.T) {
+func TestAddParseTreeEscapesATextTree(t *testing.T) {
 	src := `<p>{{.}}</p>`
 	parsed, err := htt.ParseTree("plain", "plain", src, nil, lex.Options{})
 	require.NoError(t, err)

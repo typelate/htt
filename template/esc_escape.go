@@ -22,28 +22,17 @@ import (
 // Edits are keyed by the instance (the template name mangled with its start
 // context) and the node, since one tree runs in many contexts.
 //
-// Changed: only part of what the escaper computes is used yet. A template
-// that needs more takes the old engine; see escaper.unsupported.
-
 // escapeTemplate escapes the named template and every template it calls,
 // and returns the plan for running it as the shadow trees in trees.
-// Changed: it returns a plan instead of rewriting trees, and errUnsupported
-// where the plan cannot yet be used. defined reports the templates that
-// exist without a shadow tree.
-func escapeTemplate(trees map[string]*htt.Tree, defined func(string) bool, name string) (*escapePlan, error) {
+// Changed: it returns a plan instead of rewriting trees.
+func escapeTemplate(trees map[string]*htt.Tree, name string) (*escapePlan, error) {
 	e := makeEscaper(trees)
-	e.defined = defined
 	c, _ := e.escapeTree(context{}, nil, name, 0)
 	var err error
 	if c.err != nil {
 		err, c.err.Name = c.err, name
 	} else if c.state != stateText {
 		err = &Error{ErrEndContext, nil, name, 0, fmt.Sprintf("ends in a non-text context: %v", c)}
-	}
-	// Changed: an error found while the plan is unusable may be an artifact
-	// of that, so the unusable plan is reported first.
-	if e.unsupported != "" {
-		return nil, fmt.Errorf("%w: %s", errUnsupported, e.unsupported)
 	}
 	if err != nil {
 		return nil, err
@@ -79,11 +68,6 @@ type escaper struct {
 	callEdits map[planKey]string
 	// rangeContext holds context about the current range loop.
 	rangeContext *rangeContext
-	// unsupported says why the plan cannot be used yet, or is empty. Changed: new.
-	unsupported string
-	// defined reports whether a template of the set has a tree, shadow or not.
-	// Changed: new.
-	defined func(string) bool
 }
 
 // rangeContext holds information about the current range loop.
@@ -102,14 +86,6 @@ func makeEscaper(trees map[string]*htt.Tree) escaper {
 		actionNodeEdits: map[planKey][]string{},
 		textNodeEdits:   map[planKey][]byte{},
 		callEdits:       map[planKey]string{},
-	}
-}
-
-// unsupportedBecause records that the plan cannot be used yet. The first
-// reason is kept. Changed: new.
-func (e *escaper) unsupportedBecause(reason string) {
-	if e.unsupported == "" {
-		e.unsupported = reason
 	}
 }
 
@@ -451,7 +427,6 @@ func (e *escaper) escapeList(c context, n *htt.ListNode, trimFirst, trimLast boo
 // which is the same as whether e was updated.
 func (e *escaper) escapeListConditionally(c context, n *htt.ListNode, trimFirst, trimLast bool, filter func(*escaper, context) bool) (context, bool) {
 	e1 := makeEscaper(e.trees)
-	e1.defined = e.defined
 	e1.instance = e.instance
 	e1.rangeContext = e.rangeContext
 	// Make type inferences available to f.
@@ -470,9 +445,6 @@ func (e *escaper) escapeListConditionally(c context, n *htt.ListNode, trimFirst,
 		}
 		for k, v := range e1.callEdits {
 			e.editCall(k, v)
-		}
-		if e1.unsupported != "" {
-			e.unsupportedBecause(e1.unsupported)
 		}
 	}
 	return c, ok
@@ -502,11 +474,6 @@ func (e *escaper) escapeTree(c context, node htt.Node, name string, line int) (c
 	}
 	t := e.trees[name]
 	if t == nil {
-		// UNSUPPORTED: a template with no shadow tree, added with
-		// AddParseTree. html/template escapes it; this does not yet.
-		if e.defined(name) {
-			e.unsupportedBecause("a template has no shadow tree")
-		}
 		return context{
 			state: stateError,
 			err:   errorf(ErrNoSuchTemplate, node, line, "no such template %q", name),

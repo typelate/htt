@@ -1,7 +1,6 @@
 package template
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -9,10 +8,6 @@ import (
 
 	"github.com/typelate/htt"
 )
-
-// errUnsupported marks a template the escaper does not take yet; execute
-// then runs the old engine. It goes when the escaper takes every template.
-var errUnsupported = errors.New("escaper: context not supported")
 
 // planKey names a node as it runs in one instance of its template: the
 // template name mangled with its start context.
@@ -215,14 +210,14 @@ type escapeResult struct {
 }
 
 // escapeTemplate returns the plan to run the named template as the shadow
-// trees in trees, or errUnsupported. The result is computed once per name.
-func (s *escapeSet) escapeTemplate(trees map[string]*htt.Tree, defined func(string) bool, name string) (*escapePlan, error) {
+// trees in trees. The result is computed once per name.
+func (s *escapeSet) escapeTemplate(trees map[string]*htt.Tree, name string) (*escapePlan, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if r, ok := s.results[name]; ok {
 		return r.plan, r.err
 	}
-	plan, err := escapeTemplate(trees, defined, name)
+	plan, err := escapeTemplate(trees, name)
 	if s.results == nil {
 		s.results = make(map[string]escapeResult)
 	}
