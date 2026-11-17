@@ -47,14 +47,22 @@ func TestTrustURLBypassesSchemeFilter(t *testing.T) {
 		data any
 		want string
 	}{
-		{"trusted javascript URL passes", template.URL(`javascript:onSafeAction()`),
-			`<a href="javascript:onSafeAction()">x</a>`},
-		{"trusted custom scheme passes", template.URL(`tel:+15551234`),
-			`<a href="tel:&#43;15551234">x</a>`},
-		{"untrusted javascript URL filtered", `javascript:alert(1)`,
-			`<a href="#ZgotmplZ">x</a>`},
-		{"untrusted tel URL filtered", `tel:+15551234`,
-			`<a href="#ZgotmplZ">x</a>`},
+		{
+			"trusted javascript URL passes", template.URL(`javascript:onSafeAction()`),
+			`<a href="javascript:onSafeAction()">x</a>`,
+		},
+		{
+			"trusted custom scheme passes", template.URL(`tel:+15551234`),
+			`<a href="tel:&#43;15551234">x</a>`,
+		},
+		{
+			"untrusted javascript URL filtered", `javascript:alert(1)`,
+			`<a href="#ZgotmplZ">x</a>`,
+		},
+		{
+			"untrusted tel URL filtered", `tel:+15551234`,
+			`<a href="#ZgotmplZ">x</a>`,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -75,11 +83,15 @@ func TestTrustJSStrInsideStringLiteral(t *testing.T) {
 		data any
 		want string
 	}{
-		{"trusted JSStr verbatim", template.JSStr(`already-escaped`),
-			`<script>var x = "already-escaped";</script>`},
-		{"untrusted string in string-literal context is JS-escaped",
+		{
+			"trusted JSStr verbatim", template.JSStr(`already-escaped`),
+			`<script>var x = "already-escaped";</script>`,
+		},
+		{
+			"untrusted string in string-literal context is JS-escaped",
 			`</script>`,
-			"<script>var x = \"\\u003c\\/script\\u003e\";</script>"},
+			"<script>var x = \"\\u003c\\/script\\u003e\";</script>",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -225,16 +237,22 @@ func TestUnchangedDefaultEscaping(t *testing.T) {
 		data       any
 		want       string
 	}{
-		{"text body escapes script", `<p>{{.}}</p>`,
+		{
+			"text body escapes script", `<p>{{.}}</p>`,
 			`<script>alert(1)</script>`,
-			`<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>`},
-		{"href filter blocks javascript:", `<a href="{{.}}">x</a>`,
+			`<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>`,
+		},
+		{
+			"href filter blocks javascript:", `<a href="{{.}}">x</a>`,
 			`javascript:alert(1)`,
-			`<a href="#ZgotmplZ">x</a>`},
-		{"onclick value JS-escaped",
+			`<a href="#ZgotmplZ">x</a>`,
+		},
+		{
+			"onclick value JS-escaped",
 			`<button onclick="{{.}}">x</button>`,
 			`alert("xss")`,
-			"<button onclick=\"&#34;alert(\\u0022xss\\u0022)&#34;\">x</button>"},
+			"<button onclick=\"&#34;alert(\\u0022xss\\u0022)&#34;\">x</button>",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
