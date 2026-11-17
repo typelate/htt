@@ -930,14 +930,11 @@ func httText(test execTest) (out string, failed bool) {
 
 // Reasons a case diverges. Cases with the same cause share a string.
 const (
-	causeStringer = "String and Error are not found through an addressable value when printing"
 	causePrintPtr = "a pointer is not dereferenced when printed or passed to html"
 )
 
 // execDivergences maps a case name to why htt differs from text/template.
 var execDivergences = map[string]string{
-	"V{6666}.String()":  causeStringer,
-	"W{888}.Error()":    causeStringer,
 	"empty with struct": causePrintPtr,
 }
 

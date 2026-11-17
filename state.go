@@ -857,6 +857,9 @@ func printableValue(v reflect.Value) any {
 			return "<nil>"
 		}
 	}
+	if v.CanAddr() && v.CanInterface() && (reflect.PointerTo(v.Type()).Implements(errorType) || reflect.PointerTo(v.Type()).Implements(stringerType)) {
+		return v.Addr().Interface()
+	}
 	if v.CanInterface() {
 		return v.Interface()
 	}
