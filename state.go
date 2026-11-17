@@ -449,7 +449,7 @@ func (s *state) evalCommand(dot reflect.Value, cmd *CommandNode, final reflect.V
 	case *DotNode:
 		return dot, nil
 	case *NilNode:
-		return reflect.ValueOf(nil), nil
+		return missingVal, s.errorf("nil is not a command")
 	case *NumberNode:
 		return s.idealConstant(n)
 	case *StringNode:
