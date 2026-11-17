@@ -928,15 +928,8 @@ func httText(test execTest) (out string, failed bool) {
 	return b.String(), false
 }
 
-// Reasons a case diverges. Cases with the same cause share a string.
-const (
-	causePrintPtr = "a pointer is not dereferenced when printed or passed to html"
-)
-
 // execDivergences maps a case name to why htt differs from text/template.
-var execDivergences = map[string]string{
-	"empty with struct": causePrintPtr,
-}
+var execDivergences = map[string]string{}
 
 func TestCompatTextExecTests(t *testing.T) {
 	seen := make(map[string]bool)

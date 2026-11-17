@@ -1,6 +1,7 @@
 package htt_test
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"testing"
@@ -127,6 +128,55 @@ func TestMethodOnNilInterfaceFails(t *testing.T) {
 				t.Errorf("htt(%q) error = %v, want nil pointer evaluating", tc.tmpl, gotErr)
 			}
 		})
+	}
+}
+
+type nilScriptData struct {
+	E any
+	S fmt.Stringer
+	L []any
+}
+
+// TestNilInterfaceInAScriptIsNull: a nil interface value in a script element
+// is written as null, as html/template writes it.
+func TestNilInterfaceInAScriptIsNull(t *testing.T) {
+	data := nilScriptData{L: []any{nil}}
+	tests := []struct {
+		name string
+		tmpl string
+	}{
+		{"any field", "<script>var x = {{.E}};</script>"},
+		{"stringer field", "<script>var x = {{.S}};</script>"},
+		{"index of nil element", "<script>var x = {{index .L 0}};</script>"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			want, err := stdHTML(tc.tmpl, data)
+			if err != nil {
+				t.Fatalf("html/template execute(%q) error: %v", tc.tmpl, err)
+			}
+			if err := execHTMLErr(t, tc.name, tc.tmpl, data); err != nil {
+				t.Fatalf("htt execute(%q) error: %v", tc.tmpl, err)
+			}
+			got := execHTML(t, tc.name, tc.tmpl, data)
+			if strings.ReplaceAll(got, " ", "") != strings.ReplaceAll(want, " ", "") {
+				t.Errorf("htt execute(%q) = %q, want %q (spaces removed)", tc.tmpl, got, want)
+			}
+		})
+	}
+}
+
+// TestNilInterfaceInAScriptStringIsNotNull: a nil interface value inside a
+// JS string literal in a script is not written as null, which is only right
+// in a JS expression.
+func TestNilInterfaceInAScriptStringIsNotNull(t *testing.T) {
+	tree := parseHTML(t, "script string", `<script>var x = "{{.E}}";</script>`)
+	var buf bytes.Buffer
+	if err := htt.ExecuteTemplate(&buf, tree, nilScriptData{}); err != nil {
+		t.Logf("htt execute error: %v", err)
+	}
+	if strings.Contains(buf.String(), "null") {
+		t.Errorf("htt execute = %q, want no null in a JS string", buf.String())
 	}
 }
 

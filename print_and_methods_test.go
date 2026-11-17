@@ -137,3 +137,52 @@ func TestPrintingUsesPointerMethods(t *testing.T) {
 		})
 	}
 }
+
+type plainPrint struct{ s string }
+
+type plainHolder struct {
+	Any any
+	Ptr *plainPrint
+}
+
+// TestPrintingAPointerToAStruct: a pointer to a struct with no String or
+// Error method prints as the struct, not as its address form.
+func TestPrintingAPointerToAStruct(t *testing.T) {
+	data := &plainHolder{Any: &plainPrint{s: "ada"}, Ptr: &plainPrint{s: "bob"}}
+	tests := []struct {
+		name string
+		mode string
+		tmpl string
+		want string
+	}{
+		{name: "interface holding pointer text", mode: "text", tmpl: "{{.Any}}", want: "{ada}"},
+		{name: "pointer field text", mode: "text", tmpl: "{{.Ptr}}", want: "{bob}"},
+		{name: "interface holding pointer html", mode: "html", tmpl: "<p>{{.Any}}</p>", want: "<p>{ada}</p>"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var std string
+			var err error
+			if tc.mode == "html" {
+				std, err = stdHTML(tc.tmpl, data)
+			} else {
+				std, err = stdTextString(tc.tmpl, data)
+			}
+			if err != nil {
+				t.Fatalf("std(%q) error: %v", tc.tmpl, err)
+			}
+			if std != tc.want {
+				t.Fatalf("std(%q) = %q, want %q", tc.tmpl, std, tc.want)
+			}
+			var got string
+			if tc.mode == "html" {
+				got = execHTML(t, tc.name, tc.tmpl, data)
+			} else {
+				got = execText(t, tc.name, tc.tmpl, data)
+			}
+			if got != tc.want {
+				t.Errorf("htt(%q) = %q, want %q", tc.tmpl, got, tc.want)
+			}
+		})
+	}
+}

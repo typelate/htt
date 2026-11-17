@@ -846,6 +846,12 @@ func (s *state) printValue(wr io.Writer, v reflect.Value) (int, error) {
 // dereferenced, so that a nil one prints "<nil>", unless it implements
 // error or fmt.Stringer: a method on the pointer receiver would be lost.
 func printableValue(v reflect.Value) any {
+	// A nil interface in a script element reaches here, and has no value
+	// inside to print.
+	v = indirectInterface(v)
+	if !v.IsValid() {
+		return nil
+	}
 	if v.Type().Implements(errorType) || v.Type().Implements(stringerType) {
 		if v.CanInterface() {
 			return v.Interface()
@@ -1211,7 +1217,12 @@ func (s *state) walkHTMLAction(dot reflect.Value, action *ActionNode) ([]*html.N
 	}
 	iface := printableValue(val)
 	if iface == nil {
-		return nil, s.errorf("can't print %s of type %s", val, val.Type())
+		inScriptExpr := inScript && action.HTMLContext.JSContext == "expr"
+		if !inScriptExpr {
+			return nil, s.errorf("can't print %s of type %s", val, val.Type())
+		}
+		// A nil interface in a JS expression is null, as html/template writes it.
+		return []*html.Node{{Type: html.RawNode, Data: "null"}}, nil
 	}
 	trust := s.trustOf(val)
 	// In a script expression a value that is not a string is written as
