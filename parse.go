@@ -7,8 +7,10 @@ import (
 	"go/token"
 	"path"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/typelate/htt/lex"
 )
@@ -31,6 +33,8 @@ type Tree struct {
 	text                        string // text parsed to create the template (or its parent)
 	leftDelim, rightDelim       string // action delimiters text was parsed with
 	define                      bool   // registered by a define clause; DefinedTrees installs Extract's tree for it
+	linesOnce                   sync.Once
+	lines                       []int // offset of the start of each line of text; see lineStarts
 	// Parsing only; cleared after parse.
 	scanner         *lex.Scanner
 	token           [3]lex.Token // three-token lookahead for parser.
@@ -205,20 +209,32 @@ func (t *Tree) Delims() (left, right string) {
 // An offset outside the source counts as its nearer end.
 func (t *Tree) PositionAt(pos lex.Pos) Position {
 	p := min(max(int(pos), 0), len(t.text))
-	text := t.text[:p]
-	lineNum := 1 + strings.Count(text, "\n")
-	lastNL := strings.LastIndex(text, "\n")
-	var column int
-	if lastNL == -1 {
-		column = p + 1
-	} else {
-		column = p - lastNL
-	}
+	starts := t.lineStarts()
+	// p is on the last line that starts at or before it.
+	line := sort.Search(len(starts), func(i int) bool { return starts[i] > p })
 	return Position{
 		ParseName: t.ParseName,
-		Line:      lineNum,
-		Column:    column,
+		Line:      line,
+		Column:    p - starts[line-1] + 1,
 	}
+}
+
+// lineStarts returns the offset at which each line of the source starts.
+// The table is built on first use: coverage asks for two positions per
+// block, and counting newlines from the start each time is quadratic.
+func (t *Tree) lineStarts() []int {
+	t.linesOnce.Do(func() {
+		t.lines = []int{0}
+		for i := 0; ; {
+			n := strings.IndexByte(t.text[i:], '\n')
+			if n < 0 {
+				return
+			}
+			i += n + 1
+			t.lines = append(t.lines, i)
+		}
+	})
+	return t.lines
 }
 
 // Position returns the position of n's start, with n's source text.
