@@ -285,7 +285,18 @@ func TrimsRight(n Node) bool {
 
 func (s *state) walkAction(dot reflect.Value, action *ActionNode) error {
 	action.count.Add(1)
-	val, err := s.evalPipeline(dot, action.Pipe)
+	var edit ActionEdit
+	edited := false
+	if s.plan != nil && len(action.Pipe.Decl) == 0 {
+		edit, edited = s.plan.Action(s.instance, action)
+	}
+	pipe := action.Pipe
+	if edited && edit.Drop > 0 {
+		dropped := *pipe
+		dropped.Commands = dropped.Commands[:len(dropped.Commands)-edit.Drop]
+		pipe = &dropped
+	}
+	val, err := s.evalPipeline(dot, pipe)
 	if err != nil {
 		return err
 	}
@@ -293,10 +304,8 @@ func (s *state) walkAction(dot reflect.Value, action *ActionNode) error {
 		// Variable assignment/declaration — no output.
 		return nil
 	}
-	if s.plan != nil {
-		if edit, ok := s.plan.Action(s.instance, action); ok {
-			return s.writeEdit(val, edit)
-		}
+	if edited {
+		return s.writeEdit(val, edit)
 	}
 	if _, err := s.printValue(s.wr, val); err != nil {
 		return s.writeError(err)

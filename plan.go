@@ -17,6 +17,8 @@ type Plan interface {
 
 // ActionEdit pipes an action's value through Funcs in order and writes the result.
 type ActionEdit struct {
+	// Drop is the number of commands at the end of the pipeline that are not run.
+	Drop int
 	// Funcs receive the value's Interface() first, then the previous result.
 	Funcs []func(args ...any) string
 }

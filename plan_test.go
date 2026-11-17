@@ -125,6 +125,33 @@ func TestPlanEditsAnActionsOutput(t *testing.T) {
 	}
 }
 
+func TestPlanDropsTheLastCommands(t *testing.T) {
+	plan := planFunc(func(_ string, n *htt.ActionNode) (htt.ActionEdit, bool) {
+		if n.String() != `{{.A | html}}` {
+			return htt.ActionEdit{}, false
+		}
+		return htt.ActionEdit{Drop: 1, Funcs: []func(args ...any) string{bracket}}, true
+	})
+	text := `{{.A | html}}`
+	treeSet := make(map[string]*htt.Tree)
+	root, err := htt.ParseTree("root", "root", text, treeSet, lex.Options{})
+	require.NoError(t, err)
+	trees := htt.DefinedTrees(root, treeSet)
+	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
+		tree, ok := trees[name]
+		return tree, ok
+	})
+
+	var buf bytes.Buffer
+	err = htt.ExecuteTemplate(&buf, root, map[string]any{"A": "<b>"},
+		htt.WithFinder(finder), htt.WithPlan(plan, ""))
+	require.NoError(t, err)
+	const want = "[<b>]"
+	if got := buf.String(); got != want {
+		t.Errorf("execute(%q) = %q, want %q", text, got, want)
+	}
+}
+
 // textPlan replaces text nodes through text and leaves actions alone.
 type textPlan func(instance string, n *htt.TextNode) ([]byte, bool)
 
