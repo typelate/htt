@@ -35,22 +35,31 @@ var rawTextElements = map[string]bool{
 	"title":    true,
 }
 
-// FormattingElements is the WHATWG §13.2.4.2 set subject to the
-// adoption agency algorithm (§13.2.6.4.7).
-var FormattingElements = map[string]bool{
+var formattingElements = map[string]bool{
 	"a": true, "b": true, "big": true, "code": true, "em": true,
 	"font": true, "i": true, "nobr": true, "s": true, "small": true,
 	"strike": true, "strong": true, "tt": true, "u": true,
 }
 
-// ImpliedEndTagElements is the WHATWG §13.2.6.3 "generate implied end
-// tags" set plus the "thoroughly" additions: elements whose end tags
-// authors may legally omit.
-var ImpliedEndTagElements = map[string]bool{
+// IsFormattingElement reports whether the named element, in lower case,
+// is a formatting element (WHATWG §13.2.4.2), which the adoption agency
+// algorithm reopens when another element's end tag closes it.
+func IsFormattingElement(tag string) bool {
+	return formattingElements[tag]
+}
+
+var impliedEndTagElements = map[string]bool{
 	"dd": true, "dt": true, "li": true, "optgroup": true, "option": true,
 	"p": true, "rb": true, "rp": true, "rt": true, "rtc": true,
 	"caption": true, "colgroup": true, "tbody": true, "td": true,
 	"tfoot": true, "th": true, "thead": true, "tr": true,
+}
+
+// HasImpliedEndTag reports whether the named element, in lower case, may
+// leave out its end tag: the "generate implied end tags" set of WHATWG
+// §13.2.6.3 with its "thoroughly" additions.
+func HasImpliedEndTag(tag string) bool {
+	return impliedEndTagElements[tag]
 }
 
 // htmlParse parses HTML with template actions into an
@@ -382,7 +391,7 @@ func (t *Tree) htmlParseChildren(elem *HTMLElementNode) error {
 			// x/net/html. Back up so the ancestor consumes it.
 			if nameToken.Type == lex.TokenTypeHTMLEndTag && t.htmlHasAncestor(nameToken.Value) {
 				tag := strings.ToLower(elem.TagName)
-				if FormattingElements[tag] {
+				if formattingElements[tag] {
 					elem.Misnested = true
 					t.diag(endTagOpen.Pos, nameToken.End, SeverityWarning, DiagMisnestedTag,
 						msgMisnestedClose, nameToken.Value, elem.TagName, elem.TagName)
