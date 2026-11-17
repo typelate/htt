@@ -251,11 +251,12 @@ func (t *Tree) Position(n Node) Position {
 // methods let tooling place a diagnostic and read the position-free
 // message without parsing that string.
 type ParseError struct {
-	err          error  // the bare cause; Error prefixes it with the location
-	name         string // ParseName, as it appears in the Error string
-	file         string // file path when known, "" for an in-memory template
-	line, column int
-	start, end   lex.Pos
+	err                error  // the bare cause; Error prefixes it with the location
+	name               string // ParseName, as it appears in the Error string
+	file               string // file path when known, "" for an in-memory template
+	line, column       int
+	endLine, endColumn int
+	start, end         lex.Pos
 }
 
 func (e *ParseError) Error() string {
@@ -274,21 +275,24 @@ func (e *ParseError) Position() token.Position {
 // EndPosition returns the exclusive end of the failing token, the companion
 // to Position for a ranged diagnostic.
 func (e *ParseError) EndPosition() token.Position {
-	return token.Position{Filename: e.file, Offset: int(e.end), Line: e.line, Column: e.column}
+	return token.Position{Filename: e.file, Offset: int(e.end), Line: e.endLine, Column: e.endColumn}
 }
 
 // errorf formats a parse error, clears the root, and returns the error.
 func (t *Tree) errorf(format string, args ...any) error {
 	t.Root = nil
 	tok := t.token[0]
+	end := t.PositionAt(tok.End)
 	return &ParseError{
-		err:    fmt.Errorf(format, args...),
-		name:   t.ParseName,
-		file:   t.Filepath,
-		line:   tok.Line,
-		column: t.PositionAt(tok.Pos).Column,
-		start:  tok.Pos,
-		end:    tok.End,
+		err:       fmt.Errorf(format, args...),
+		name:      t.ParseName,
+		file:      t.Filepath,
+		line:      tok.Line,
+		column:    t.PositionAt(tok.Pos).Column,
+		endLine:   end.Line,
+		endColumn: end.Column,
+		start:     tok.Pos,
+		end:       tok.End,
 	}
 }
 
