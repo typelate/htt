@@ -15,10 +15,29 @@ type callArgsV struct {
 }
 
 type callArgsData struct {
-	Nil any
-	S   string
-	V   callArgsV
-	VP  *callArgsV
+	Nil      any
+	S        string
+	V        callArgsV
+	VP       *callArgsV
+	NilPtr   func(*int) bool
+	NilMap   func(map[string]int) bool
+	NilSlice func([]int) bool
+	NilFunc  func(func()) bool
+	NilChan  func(chan int) bool
+	NilIface func(fmt.Stringer) bool
+}
+
+// callArgsNilData returns data whose function fields report whether the
+// argument they receive is nil. A call builtin needs the function as a value.
+func callArgsNilData() *callArgsData {
+	return &callArgsData{
+		NilPtr:   func(p *int) bool { return p == nil },
+		NilMap:   func(m map[string]int) bool { return m == nil },
+		NilSlice: func(s []int) bool { return s == nil },
+		NilFunc:  func(f func()) bool { return f == nil },
+		NilChan:  func(c chan int) bool { return c == nil },
+		NilIface: func(s fmt.Stringer) bool { return s == nil },
+	}
 }
 
 // callArgsFuncs returns the functions the argument tests call. Each returns
@@ -123,5 +142,17 @@ func TestNilLiteralArgument(t *testing.T) {
 		{name: "nil for int parameter", input: "{{takeInt nil}}", wantErr: "cannot assign nil to int"},
 		{name: "nil for variadic int parameter", input: "{{variadicInt 1 nil}}", wantErr: "cannot assign nil to int"},
 		{name: "nil for pointer parameter", input: "{{takePtr nil}}", data: &callArgsData{}, want: "true"},
+	})
+}
+
+func TestNilInterfaceArgument(t *testing.T) {
+	runCallArgsRows(t, []callArgsRow{
+		{name: "nil interface pipeline to pointer", input: "{{ .Nil | call .NilPtr }}", data: callArgsNilData(), want: "true"},
+		{name: "nil interface field to pointer", input: "{{ call .NilPtr .Nil }}", data: callArgsNilData(), want: "true"},
+		{name: "nil interface pipeline to map", input: "{{ .Nil | call .NilMap }}", data: callArgsNilData(), want: "true"},
+		{name: "nil interface field to slice", input: "{{ call .NilSlice .Nil }}", data: callArgsNilData(), want: "true"},
+		{name: "nil interface field to func", input: "{{ call .NilFunc .Nil }}", data: callArgsNilData(), want: "true"},
+		{name: "nil interface field to chan", input: "{{ call .NilChan .Nil }}", data: callArgsNilData(), want: "true"},
+		{name: "nil interface field to interface", input: "{{ call .NilIface .Nil }}", data: callArgsNilData(), want: "true"},
 	})
 }

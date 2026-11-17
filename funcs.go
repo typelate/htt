@@ -139,6 +139,9 @@ func call(fn reflect.Value, args ...reflect.Value) (reflect.Value, error) {
 	argv := make([]reflect.Value, len(args))
 	for i, arg := range args {
 		paramType := argType(typ, i, numIn, dddType)
+		if arg.Kind() == reflect.Interface && arg.IsNil() {
+			arg = reflect.Value{}
+		}
 		if !arg.IsValid() && !canBeNil(paramType) {
 			return reflect.Value{}, fmt.Errorf("value is nil; should be of type %s", paramType)
 		}
