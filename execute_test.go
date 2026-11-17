@@ -1428,3 +1428,47 @@ func TestErrorArgumentToParenthesizedStage(t *testing.T) {
 		})
 	}
 }
+
+type argItem struct{ Title string }
+
+type argData struct {
+	Ptr  *argItem
+	Nil  *argItem
+	Item argItem
+	List []*argItem
+}
+
+func (argData) ByValue(i argItem) string      { return "value:" + i.Title }
+func (argData) ByPointer(i *argItem) string   { return "pointer:" + i.Title }
+func (argData) ByIface(i fmt.Stringer) string { return "iface" }
+
+// A pointer passed where the function takes the pointed-to type is
+// dereferenced, as html/template does.
+func TestMethodArgIndirect(t *testing.T) {
+	data := argData{Ptr: &argItem{Title: "a"}, Item: argItem{Title: "b"}, List: []*argItem{{Title: "c"}, {Title: "d"}}}
+	for _, tc := range []struct {
+		name, tmpl string
+		wantErr    bool
+	}{
+		{name: "pointer to value parameter", tmpl: `{{.ByValue .Ptr}}`},
+		{name: "pointer from a range", tmpl: `{{range .List}}{{$.ByValue .}}{{end}}`},
+		{name: "pointer piped to value parameter", tmpl: `{{.Ptr | .ByValue}}`},
+		{name: "pointer to pointer parameter", tmpl: `{{.ByPointer .Ptr}}`},
+		{name: "value to value parameter", tmpl: `{{.ByValue .Item}}`},
+		{name: "nil pointer to value parameter", tmpl: `{{.ByValue .Nil}}`, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			std := htmltemplate.Must(htmltemplate.New("test").Parse(tc.tmpl))
+			var want bytes.Buffer
+			stdErr := std.Execute(&want, data)
+			gotErr := execHTMLErr(t, "test", tc.tmpl, data)
+			if tc.wantErr {
+				require.Error(t, stdErr, "html/template")
+				require.Error(t, gotErr, "engine")
+				return
+			}
+			require.NoError(t, stdErr, "html/template")
+			assert.Equal(t, want.String(), execHTML(t, "test", tc.tmpl, data))
+		})
+	}
+}

@@ -811,7 +811,11 @@ func (s *state) evalCall(dot reflect.Value, fun reflect.Value, cmd *CommandNode,
 		if err != nil {
 			return missingVal, err
 		}
-		argv = append(argv, s.validateArg(paramType, arg))
+		arg, err = s.validateArg(paramType, arg)
+		if err != nil {
+			return missingVal, err
+		}
+		argv = append(argv, arg)
 	}
 	// Add the piped (final) argument.
 	if final.IsValid() {
@@ -824,7 +828,11 @@ func (s *state) evalCall(dot reflect.Value, fun reflect.Value, cmd *CommandNode,
 		} else {
 			paramType = typ.In(numIn - 1).Elem()
 		}
-		argv = append(argv, s.validateArg(paramType, final))
+		piped, err := s.validateArg(paramType, final)
+		if err != nil {
+			return missingVal, err
+		}
+		argv = append(argv, piped)
 	}
 
 	result, err := safeCall(fun, argv)
@@ -1935,21 +1943,29 @@ var reflectValueType = reflect.TypeFor[reflect.Value]()
 
 // validateArg converts an argument value for a function call.
 // If the parameter type is reflect.Value, wrap the arg.
-// Otherwise, unwrap interfaces.
-func (s *state) validateArg(paramType reflect.Type, arg reflect.Value) reflect.Value {
+// Otherwise, unwrap interfaces, and, as text/template does, dereference a
+// pointer whose element is assignable to the parameter, so a *T can be
+// passed to a func(T).
+func (s *state) validateArg(paramType reflect.Type, arg reflect.Value) (reflect.Value, error) {
 	if paramType == reflectValueType {
-		return reflect.ValueOf(arg)
+		return reflect.ValueOf(arg), nil
 	}
 	if !arg.IsValid() {
 		if paramType != nil && canBeNil(paramType) {
-			return reflect.Zero(paramType)
+			return reflect.Zero(paramType), nil
 		}
-		return arg
+		return arg, nil
 	}
 	if arg.Kind() == reflect.Interface && !arg.IsNil() {
 		arg = arg.Elem()
 	}
-	return arg
+	if paramType != nil && arg.Kind() == reflect.Pointer && !arg.Type().AssignableTo(paramType) && arg.Type().Elem().AssignableTo(paramType) {
+		if arg.IsNil() {
+			return missingVal, s.errorf("dereference of nil pointer of type %s", arg.Type())
+		}
+		arg = arg.Elem()
+	}
+	return arg, nil
 }
 
 // missingVal is the zero reflect.Value used to signal "missing".
