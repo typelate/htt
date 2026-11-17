@@ -991,6 +991,7 @@ func (t *Tree) blockControl() (Node, error) {
 	block.leftDelim, block.rightDelim = t.leftDelim, t.rightDelim
 	block.ParseName = t.ParseName
 	block.Filepath = t.Filepath
+	block.HTMLMode = t.HTMLMode
 	block.RootTrimFirst = startTrimRight
 	block.RootTrimLast = en.TrimLeft
 	if err := t.addDefinition(block); err != nil {
