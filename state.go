@@ -615,6 +615,9 @@ func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, fina
 	}
 	switch structReceiver.Kind() {
 	case reflect.Struct:
+		if sf, ok := structReceiver.Type().FieldByName(fieldName); ok && !sf.IsExported() {
+			return missingVal, s.errorf("%s is an unexported field of struct type %s", fieldName, typ)
+		}
 		field := structReceiver.FieldByName(fieldName)
 		if field.IsValid() {
 			return field, nil
