@@ -1,5 +1,4 @@
 package lex
 
-// Pos represents a byte position in the original input text from which
-// this template was parsed.
+// Pos is a byte offset into the text a template was parsed from.
 type Pos int

@@ -53,20 +53,10 @@ var ImpliedEndTagElements = map[string]bool{
 	"tfoot": true, "th": true, "thead": true, "tr": true,
 }
 
-// htmlParse is the top-level parser for HTML+template content.
-// It produces an HTMLDocumentFragmentNode containing the parsed content.
-//
-// It accepts every template text/template and html/template parse. Markup
-// that is not a tag it can build an element from is text: a '<' not
-// followed by an ASCII letter, '/', '!' or '?' (as in the WHATWG
-// tokenizer's data state: "1 < 2", "I <3", "back <-"), and a tag with a
-// template action in its tag name (<{{.Tag}}>, <h{{.N}}>) or an attribute
-// name (data-{{.Name}}="x"), a template comment in its attributes
-// (<div {{/* c */}} class="a">), or other markup the lexer does not lex
-// as a tag (see lex's lexHTMLText for the full rule). Such a tag becomes
-// TextNode, ActionNode and CommentNode children of the enclosing node,
-// with no HTMLElementNode and no diagnostic, and the end tag that closes
-// it is text as well. Well-formed tags parse into elements as before.
+// htmlParse parses HTML with template actions into an
+// HTMLDocumentFragmentNode. It accepts every template html/template
+// parses: markup the lexer does not lex as a tag (see lex's lexHTMLText)
+// becomes text and action nodes, with no element and no diagnostic.
 func (t *Tree) htmlParse() error {
 	frag := t.newHTMLDocumentFragment(t.peek().Pos)
 	for t.peek().Type != lex.TokenTypeEOF {
@@ -83,7 +73,6 @@ func (t *Tree) htmlParse() error {
 		}
 	}
 	frag.end = lex.Pos(len(t.text))
-	// Store the fragment as the tree root by wrapping in a ListNode.
 	t.Root = t.newList(0)
 	var n Node = frag
 	t.Root.Nodes = append(t.Root.Nodes, n)
@@ -91,10 +80,9 @@ func (t *Tree) htmlParse() error {
 	return nil
 }
 
-// htmlParseNode dispatches parsing based on the current token type.
-// This handles both top-level HTML nodes and attribute tokens that appear
-// inside template control structure bodies (e.g., {{if .Show}}class="x"{{end}}
-// in an attribute position).
+// htmlParseNode parses one node. Attribute tokens reach it from the body of
+// a control structure written among attributes, as in
+// {{if .Show}}class="x"{{end}}.
 func (t *Tree) htmlParseNode() (Node, error) {
 	switch token := t.next(); token.Type {
 	case lex.TokenTypeHTMLText, lex.TokenTypeHTMLAttrValue:
@@ -103,9 +91,8 @@ func (t *Tree) htmlParseNode() (Node, error) {
 		}
 		return t.newText(token.Pos, token.End, token.Value), nil
 	case lex.TokenTypeHTMLComment:
-		// Comment content inside a template control structure body
-		// (e.g., <!-- {{if .A}}a{{end}} -->). A comment body has no HTML
-		// structure: html/template reads it as text with actions.
+		// Comment content in the body of a control structure, as in
+		// <!-- {{if .A}}a{{end}} -->.
 		return t.newText(token.Pos, token.End, token.Value), nil
 	case lex.TokenTypeHTMLTagOpen:
 		return t.htmlParseStartTag(token)
@@ -116,8 +103,6 @@ func (t *Tree) htmlParseNode() (Node, error) {
 	case lex.TokenTypeHTMLDoctype:
 		return t.newHTMLDoctype(token.Pos, token.End, token.Value), nil
 	case lex.TokenTypeHTMLAttrName:
-		// Attribute token inside a template control structure body
-		// (e.g., {{if .Show}}class="visible"{{end}} in attribute position).
 		attr, err := t.htmlParseAttribute(token)
 		if err != nil {
 			return nil, err
@@ -142,8 +127,7 @@ func (t *Tree) htmlParseNode() (Node, error) {
 	}
 }
 
-// htmlParseStartTag parses an HTML start tag after '<' has been consumed.
-// Returns an HTMLElementNode.
+// htmlParseStartTag parses an element after its '<'.
 func (t *Tree) htmlParseStartTag(openToken lex.Token) (Node, error) {
 	nameToken := t.next()
 	if nameToken.Type != lex.TokenTypeHTMLStartTag {
@@ -153,22 +137,19 @@ func (t *Tree) htmlParseStartTag(openToken lex.Token) (Node, error) {
 	elem := t.newHTMLElement(openToken.Pos, tagName)
 	elem.AttrStart = nameToken.End
 
-	// ParseTree attributes and tag close.
 	if err := t.htmlParseAttributes(elem); err != nil {
 		return nil, err
 	}
 
-	// Check if this is a void element.
 	if voidElements[strings.ToLower(tagName)] {
 		elem.Void = true
 		return elem, nil
 	}
 	if elem.Void {
-		// Self-closing tag (set by htmlParseAttributes when it sees />).
+		// Self-closing: htmlParseAttributes saw "/>".
 		return elem, nil
 	}
 
-	// Check if this is a raw text element.
 	if rawTextElements[strings.ToLower(tagName)] {
 		if err := t.htmlParseRawTextContent(elem); err != nil {
 			return nil, err
@@ -176,7 +157,6 @@ func (t *Tree) htmlParseStartTag(openToken lex.Token) (Node, error) {
 		return elem, nil
 	}
 
-	// ParseTree children until matching end tag.
 	t.htmlAncestors = append(t.htmlAncestors, strings.ToLower(tagName))
 	err := t.htmlParseChildren(elem)
 	t.htmlAncestors = t.htmlAncestors[:len(t.htmlAncestors)-1]
@@ -227,23 +207,21 @@ func (t *Tree) htmlParseAttributes(elem *HTMLElementNode) error {
 	}
 }
 
-// htmlParseAttribute parses a single attribute. The attribute name token has
-// already been consumed.
+// htmlParseAttribute parses one attribute after its name token.
 func (t *Tree) htmlParseAttribute(nameToken lex.Token) (*HTMLAttributeNode, error) {
 	attr := t.newHTMLAttribute(nameToken.Pos)
 	attr.Key = append(attr.Key, t.newText(nameToken.Pos, nameToken.End, nameToken.Value))
 	attr.end = nameToken.End
 
-	// Check for '='.
 	next := t.next()
 	if next.Type != lex.TokenTypeHTMLAttrEquals {
-		// Boolean attribute — no value.
+		// A boolean attribute.
 		t.backup()
 		return attr, nil
 	}
 	attr.HasValue = true
 
-	// ParseTree value parts (may be multiple tokens with template actions interleaved).
+	// The value may be several tokens with actions between them.
 	var quote byte // the quote a quoted value opened with
 	closed := false
 	for {
@@ -265,16 +243,13 @@ func (t *Tree) htmlParseAttribute(nameToken lex.Token) (*HTMLAttributeNode, erro
 				t.backup()
 				return attr, nil
 			}
-			// Check if this is {{end}} or {{else}} — if so, it terminates
-			// a control structure body, not the attribute value.
+			// An {{end}} or {{else}} ends the control structure the
+			// attribute is in, not the value: leave it for itemList.
 			next := t.nextNonSpace()
 			if next.Type == lex.TokenTypeEnd || next.Type == lex.TokenTypeElse {
-				// Back up both the peeked token and the left delimiter
-				// so the caller (itemList) can process {{end}}/{{else}}.
 				t.backup2(token)
 				return attr, nil
 			}
-			// Not a control terminator — parse as template action in value.
 			t.backup()
 			t.actionLine = token.Line
 			t.actionPos = token.Pos
@@ -328,12 +303,10 @@ func (t *Tree) htmlParseComment(openToken lex.Token) (Node, error) {
 	}
 }
 
-// htmlParseEndTag parses an end tag after '</' has been consumed.
-// Returns the end tag as a text node since the parser doesn't match it
-// structurally here — that's done by the parent element parser.
+// htmlParseEndTag parses, after its "</", an end tag that closes no open
+// element, and keeps it as verbatim text. htmlParseChildren matches the
+// end tags that do close one.
 func (t *Tree) htmlParseEndTag(openToken lex.Token) (Node, error) {
-	// This is called when we encounter </tag> at the top level of the fragment
-	// or when it doesn't match the expected parent. Just consume it.
 	nameToken := t.next()
 	if nameToken.Type != lex.TokenTypeHTMLEndTag {
 		return nil, t.unexpected(nameToken, "HTML end tag name")
@@ -348,16 +321,14 @@ func (t *Tree) htmlParseEndTag(openToken lex.Token) (Node, error) {
 		// The end tag of an element whose start tag is text.
 		return text, nil
 	}
-	// Browsers ignore this stray end tag; record a diagnostic and
-	// preserve it verbatim (byte-parity with stdlib html/template).
+	// Browsers ignore a stray end tag; html/template writes it.
 	t.diag(openToken.Pos, closeToken.End, SeverityWarning, DiagOrphanEndTag, msgOrphanEndTag, nameToken.Value)
 	return text, nil
 }
 
 // htmlTakeDegraded reports whether name closes a start tag the lexer read
-// as text (lex.Token.DegradedTag) inside the element being parsed, and if
-// so forgets that start tag. Such an end tag is text too: it closes no
-// element and is no stray end tag.
+// as text inside the element being parsed, and forgets that start tag.
+// Such an end tag is text too.
 func (t *Tree) htmlTakeDegraded(name string) bool {
 	for i := len(t.htmlDegraded) - 1; i >= t.htmlDegradedMin; i-- {
 		if strings.EqualFold(t.htmlDegraded[i], name) {
@@ -368,8 +339,7 @@ func (t *Tree) htmlTakeDegraded(name string) bool {
 	return false
 }
 
-// htmlParseChildren parses child nodes of an element until the matching
-// end tag is found.
+// htmlParseChildren parses an element's children up to its end tag.
 func (t *Tree) htmlParseChildren(elem *HTMLElementNode) error {
 	t.htmlDepth++
 	defer func() { t.htmlDepth-- }()
@@ -388,12 +358,10 @@ func (t *Tree) htmlParseChildren(elem *HTMLElementNode) error {
 		token := t.peek()
 		switch token.Type {
 		case lex.TokenTypeHTMLEndTagOpen:
-			// Check if this is our matching end tag.
 			endTagOpen := t.next() // consume </
 			nameToken := t.next()
 			if nameToken.Type == lex.TokenTypeHTMLEndTag && t.htmlTakeDegraded(nameToken.Value) {
-				// The end tag of an element inside this one whose start
-				// tag is text: it is text too.
+				// It closes a start tag that is text, so it is text too.
 				closeToken := t.next() // consume >
 				text := t.newText(endTagOpen.Pos, closeToken.End, "</"+nameToken.Value+">")
 				text.Verbatim = true
@@ -401,7 +369,6 @@ func (t *Tree) htmlParseChildren(elem *HTMLElementNode) error {
 				continue
 			}
 			if nameToken.Type == lex.TokenTypeHTMLEndTag && strings.EqualFold(nameToken.Value, elem.TagName) {
-				// Matching end tag — consume '>' and return.
 				closeToken := t.next()
 				if closeToken.Type != lex.TokenTypeHTMLTagEnd {
 					return t.unexpected(closeToken, "HTML end tag close")
@@ -411,9 +378,8 @@ func (t *Tree) htmlParseChildren(elem *HTMLElementNode) error {
 				elem.end = closeToken.End
 				return nil
 			}
-			// Not our end tag. Check if it matches an open ancestor element.
-			// If so, implicitly close this element and back up so the
-			// ancestor can consume its closing tag (like x/net/html).
+			// An ancestor's end tag closes this element too, as in
+			// x/net/html. Back up so the ancestor consumes it.
 			if nameToken.Type == lex.TokenTypeHTMLEndTag && t.htmlHasAncestor(nameToken.Value) {
 				tag := strings.ToLower(elem.TagName)
 				if FormattingElements[tag] {
@@ -424,9 +390,8 @@ func (t *Tree) htmlParseChildren(elem *HTMLElementNode) error {
 				t.backup2(token)
 				return nil
 			}
-			// No ancestor match — orphan end tag. Browsers ignore it;
-			// record a diagnostic and preserve it verbatim as a text
-			// child (byte-parity with stdlib html/template).
+			// An orphan end tag. Browsers ignore it; html/template
+			// writes it.
 			if nameToken.Type == lex.TokenTypeHTMLEndTag {
 				closeToken := t.next() // consume >
 				t.diag(endTagOpen.Pos, closeToken.End, SeverityWarning, DiagOrphanEndTag, msgOrphanEndTag, nameToken.Value)
@@ -434,15 +399,11 @@ func (t *Tree) htmlParseChildren(elem *HTMLElementNode) error {
 				text.Verbatim = true
 				elem.Children = append(elem.Children, text)
 			} else {
-				// nameToken is not an end tag name (e.g., lexer error).
-				// Back up so the next iteration can handle it properly.
 				return t.unexpected(nameToken, "HTML end tag name")
 			}
 		case lex.TokenTypeLeftDelim:
-			// Peek ahead to see if this is {{end}} or {{else}} which would
-			// terminate an enclosing control structure. If so, leave the
-			// element unclosed and return so the control structure can
-			// process the terminator.
+			// An {{end}} or {{else}} of an enclosing control structure
+			// leaves the element unclosed.
 			if t.htmlPeekIsControlTerminator() {
 				return nil
 			}
@@ -454,8 +415,7 @@ func (t *Tree) htmlParseChildren(elem *HTMLElementNode) error {
 				elem.Children = append(elem.Children, n)
 			}
 		case lex.TokenTypeEOF:
-			// Unclosed element — don't error, just return what we have.
-			// Structural diagnostics would flag this.
+			// An unclosed element is not an error.
 			return nil
 		default:
 			n, err := t.htmlParseNode()
@@ -469,9 +429,8 @@ func (t *Tree) htmlParseChildren(elem *HTMLElementNode) error {
 	}
 }
 
-// htmlParseRawTextContent parses the content of raw text elements (script, style, etc.).
-// The lexer emits raw text content as TokenTypeHTMLText (stopping only at {{
-// and the matching </tagname>), so this is a straightforward token loop.
+// htmlParseRawTextContent parses the content of script, style, textarea
+// and title, which the lexer emits as text and actions up to the end tag.
 func (t *Tree) htmlParseRawTextContent(elem *HTMLElementNode) error {
 	for {
 		token := t.peek()
@@ -480,7 +439,6 @@ func (t *Tree) htmlParseRawTextContent(elem *HTMLElementNode) error {
 			t.next()
 			elem.Children = append(elem.Children, t.newText(token.Pos, token.End, token.Value))
 		case lex.TokenTypeHTMLEndTagOpen:
-			// Consume matching end tag tokens.
 			endTagOpen := t.next() // consume </
 			nameToken := t.next()
 			if nameToken.Type != lex.TokenTypeHTMLEndTag || !strings.EqualFold(nameToken.Value, elem.TagName) {
@@ -527,13 +485,9 @@ func (t *Tree) htmlParseRawTextContent(elem *HTMLElementNode) error {
 	}
 }
 
-// htmlPeekIsControlTerminator peeks ahead without consuming tokens to check
-// if the current position starts a {{end}} or {{else}} action. This is used
-// by htmlParseChildren to stop consuming tokens when a template control
-// terminator is encountered, allowing the enclosing itemList to process it.
+// htmlPeekIsControlTerminator reports whether the action at the current
+// position is {{end}} or {{else}}. It consumes nothing.
 func (t *Tree) htmlPeekIsControlTerminator() bool {
-	// Current peek is LeftDelim. Consume it and the next non-space token
-	// to check the keyword, then back them up.
 	leftDelim := t.next() // consume {{
 	keyword := t.nextNonSpace()
 	isTerminator := keyword.Type == lex.TokenTypeEnd || keyword.Type == lex.TokenTypeElse
@@ -541,17 +495,12 @@ func (t *Tree) htmlPeekIsControlTerminator() bool {
 	return isTerminator
 }
 
-// htmlHasAncestor reports whether tag (case-insensitive) matches any
-// element on the open-element ancestor stack. This is used to decide
-// whether a mismatched end tag should implicitly close the current element
-// (when the tag belongs to an ancestor) or be treated as an orphan
-// (preserved verbatim, diagnosed, not structural).
+// htmlHasAncestor reports whether tag names an open ancestor element.
 func (t *Tree) htmlHasAncestor(tag string) bool {
 	return slices.Contains(t.htmlAncestors, strings.ToLower(tag))
 }
 
-// htmlParseTemplateAction parses a template action (the left delimiter has
-// been consumed). This dispatches to the existing template action parser.
+// htmlParseTemplateAction parses an action after its left delimiter.
 func (t *Tree) htmlParseTemplateAction() (Node, error) {
 	switch token := t.nextNonSpace(); token.Type {
 	case lex.TokenTypeBlock:
@@ -588,17 +537,11 @@ func (t *Tree) htmlParseTemplateAction() (Node, error) {
 	}
 }
 
-// htmlDefineControl parses a {{define "name"}}...{{end}} and returns a
-// DefineNode that keeps the define inline in the AST. The "define" keyword
-// has already been consumed. The openToken is the left delimiter.
+// htmlDefineControl parses {{define "name"}}...{{end}} after the define
+// keyword and returns a DefineNode.
 func (t *Tree) htmlDefineControl(openToken lex.Token) (Node, error) {
 	const context = "define clause"
-	// actionPos must be captured now, before the body is parsed: itemList
-	// recurses into textOrAction for every nested action, and each of
-	// those defers clearActionLine, which zeroes t.actionPos when it
-	// returns. Reading t.actionPos after t.itemList() below (as opposed
-	// to this saved copy) would always observe 0, mirroring the local
-	// capture blockControl already does for the same reason.
+	// Saved now: parsing the body clears t.actionPos.
 	actionPos := t.actionPos
 	startTrimLeft := t.actionTrimLeft
 	nameToken, err := t.expectOneOf(lex.TokenTypeString, lex.TokenTypeRawString, context)
@@ -624,10 +567,9 @@ func (t *Tree) htmlDefineControl(openToken lex.Token) (Node, error) {
 	if !ok {
 		return nil, t.errorf("unexpected %s in %s", end, context)
 	}
-	// Register the define in the treeSet as text/template does, so a
-	// second definition of the name that is not empty is an error and an
-	// empty one gives way. Extract builds the tree a caller installs;
-	// DefinedTrees picks it by this body.
+	// Register the define as text/template does, so that a second
+	// definition that is not empty is an error. DefinedTrees swaps in
+	// the tree Extract builds for this body.
 	if err := t.addDefinition(&Tree{Name: name, Root: body, text: t.text, leftDelim: t.leftDelim, rightDelim: t.rightDelim, ParseName: t.ParseName, Filepath: t.Filepath, HTMLMode: t.HTMLMode, RootTrimFirst: startTrimRight, RootTrimLast: en.TrimLeft, define: true}); err != nil {
 		return nil, err
 	}
@@ -639,8 +581,7 @@ func (t *Tree) htmlDefineControl(openToken lex.Token) (Node, error) {
 	return d, nil
 }
 
-// htmlTextOrAction handles HTML tokens that appear inside template control
-// structure bodies (e.g., inside {{range ...}}...{{end}}).
+// htmlTextOrAction parses an HTML token in the body of a control structure.
 func (t *Tree) htmlTextOrAction() (Node, error) {
 	return t.htmlParseNode()
 }

@@ -12,46 +12,27 @@ import (
 	"github.com/typelate/htt"
 )
 
-// CoverEnv names the environment variable that turns on node coverage
-// export. muxt sets it to a directory when it runs a package's tests with
-// this engine laid over html/template; each test binary then appends the
-// template nodes it executes to <dir>/<pid>.cov in CoverProfile.WriteTo's
-// format, and muxt unions the files afterward.
+// CoverEnv names the environment variable that turns on coverage export.
+// When it holds a directory, the process appends the blocks its templates
+// execute to <dir>/<pid>.cov, in htt.CoverProfile.WriteTo's format.
 const CoverEnv = "MUXT_TEMPLATE_COVER"
 
-// CoverDisabledMarker starts the one line a test binary prints on stderr
-// when its coverage export fails and stops; the error follows it. muxt
-// reads a run with this line in its output as coverage unknown.
+// CoverDisabledMarker starts the line printed on stderr when coverage
+// export fails and stops. The error follows it.
 const CoverDisabledMarker = "muxt: template coverage export disabled:"
 
-// processCover is the process's coverage export: nil, the normal case,
-// unless coverEnv named a directory when the package was initialized. It
-// is this package's only mutable state. The environment can be read only
-// once per process, as there is no exit hook in which to flush a profile
-// collected in memory, so the export appends as it goes instead.
-//
-// It is package-level state, against the usual guideline, knowingly:
-// when this package stands in for html/template,
-// the user's code calls html/template's API and nothing else, so there is
-// no constructor or option through which an export could be passed, and
-// the environment variable, read once here, is the opt-in. Tests replace
-// it through useCoverExport, which is why it is a variable.
+// processCover is the process's coverage export, nil unless CoverEnv named
+// a directory at init. It is package-level state on purpose: this package
+// stands in for html/template, whose API has nowhere to pass an export.
+// Tests replace it through useCoverExport.
 var processCover = coverExportFor(os.Getenv(CoverEnv), os.Stderr)
 
-// coverExport appends the blocks of executed template nodes to a cover
-// profile file the first time each is reached. Mode set is monotone, so
-// a block is written once; every write is synchronous, so nothing is lost
-// when the test binary exits, and no goroutine or timer is involved.
-//
-// The file, with its mode line, is created as the export is made, when
-// the package is initialized, before any template runs: its existence is
-// what tells muxt that a test binary ran this engine, so that a profile
-// with no blocks reads as templates no test reached, and no profile at
-// all as coverage unknown.
-//
-// Coverage is a by-product of the user's tests, so it never fails them:
-// the first error opening or writing the file is reported once on stderr
-// and turns the export off for the rest of the process.
+// coverExport appends each executed block to a cover profile file the
+// first time it runs. Writes are synchronous, since there is no exit hook
+// to flush from. The file is created with its mode line at init, so that
+// an empty profile means no template ran and a missing one means the
+// export never started. The first error is reported once on stderr and
+// turns the export off: coverage must not fail the tests it rides on.
 type coverExport struct {
 	path   string
 	stderr io.Writer
@@ -62,9 +43,8 @@ type coverExport struct {
 	written  map[string]struct{}
 }
 
-// coverExportFor is the export to <dir>/<pid>.cov, which it opens, nil
-// when dir is empty. A file it cannot open is reported on stderr, and the
-// export it returns is off.
+// coverExportFor opens the export to <dir>/<pid>.cov. It returns nil for
+// an empty dir, and an export that is off when the file cannot be opened.
 func coverExportFor(dir string, stderr io.Writer) *coverExport {
 	if dir == "" {
 		return nil
@@ -79,27 +59,22 @@ func coverExportFor(dir string, stderr io.Writer) *coverExport {
 		c.disable(err)
 		return c
 	}
-	// The file stays open for the life of the process; the operating
-	// system closes it at exit, and every write before then has already
-	// reached it.
+	// The file stays open until the process exits.
 	c.file = f
 	return c
 }
 
-// disable turns the export off and says why, once. The caller holds mu,
-// or is the only one with c.
+// disable turns the export off and reports err. The caller holds mu or is
+// the only one with c.
 func (c *coverExport) disable(err error) {
 	c.disabled = true
-	// The export is off from here on; a failure to report that has
-	// nowhere better to go.
+	// A failure to report has nowhere better to go.
 	_, _ = fmt.Fprintf(c.stderr, "%s %v\n", CoverDisabledMarker, err)
 }
 
-// execute runs tree with a cover profile attached, then appends the blocks
-// the run reached for the first time. A profile per execute, rather than
-// one for the process, keeps the export from holding every tree ever
-// parsed and walking all of them after each execute; c.written carries
-// what is already in the file. It returns only the execution error.
+// execute runs tree with a profile of its own, then appends the blocks it
+// reached for the first time. A profile per call keeps the export from
+// walking every tree after each execute.
 func (c *coverExport) execute(wr io.Writer, tree *htt.Tree, data any, opts []htt.Option) error {
 	cp := new(htt.CoverProfile)
 	err := htt.ExecuteTemplate(wr, tree, data, append(opts, htt.WithCoverProfile(cp))...)
@@ -118,9 +93,9 @@ func (c *coverExport) append(cp *htt.CoverProfile) {
 	}
 }
 
-// openProfile opens name for appending, writing the mode line only if the
-// file is empty: a predecessor with the same pid, as after syscall.Exec,
-// may already have written to it.
+// openProfile opens name for appending and writes the mode line if the
+// file is empty. A process with the same pid, as after exec, may have
+// written to it already.
 func openProfile(name string) (*os.File, error) {
 	f, err := os.OpenFile(name, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 	if err != nil {

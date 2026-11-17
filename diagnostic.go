@@ -7,14 +7,16 @@ import (
 	"github.com/typelate/htt/lex"
 )
 
-// Severity indicates how a structural diagnostic should be treated.
+// Severity ranks a Diagnostic.
 type Severity int
 
+// The severities.
 const (
 	SeverityWarning Severity = iota
 	SeverityError
 )
 
+// String returns "warning" or "error".
 func (s Severity) String() string {
 	switch s {
 	case SeverityWarning:
@@ -26,10 +28,11 @@ func (s Severity) String() string {
 	}
 }
 
-// DiagnosticCode identifies a class of structural finding. Codes are
-// stable identifiers for tests, suppression, and LSP mapping.
+// DiagnosticCode names a class of finding. Codes are stable.
 type DiagnosticCode string
 
+// The diagnostic codes. The parser reports DiagOrphanEndTag and
+// DiagMisnestedTag; the others are for analyses built on the tree.
 const (
 	DiagUnclosedElement DiagnosticCode = "unclosed-element"
 	DiagOrphanEndTag    DiagnosticCode = "orphan-end-tag"
@@ -49,9 +52,8 @@ const (
 	DiagUnusedCSSSelector          DiagnosticCode = "unused-css-selector"
 )
 
-// Diagnostic is a non-fatal structural finding: the tree still
-// faithfully represents the source, but a browser's tree construction
-// would diverge from the source's literal nesting at this position.
+// Diagnostic is a finding that does not stop the parse: a place where a
+// browser would build a tree other than the one the source spells.
 type Diagnostic struct {
 	Pos      lex.Pos
 	End      lex.Pos
@@ -60,17 +62,20 @@ type Diagnostic struct {
 	Message  string
 }
 
+// String formats d with its severity and byte offset.
 func (d Diagnostic) String() string {
 	return fmt.Sprintf("%s at pos %d: %s", d.Severity, d.Pos, d.Message)
 }
 
+// Diagnostics is a list of findings.
 type Diagnostics []Diagnostic
 
+// SortByPos sorts ds by position, keeping the order of equals.
 func (ds Diagnostics) SortByPos() {
 	slices.SortStableFunc(ds, func(a, b Diagnostic) int { return int(a.Pos - b.Pos) })
 }
 
-// diag records a parse-time structural diagnostic on the tree.
+// diag records a diagnostic on the tree.
 func (t *Tree) diag(pos, end lex.Pos, sev Severity, code DiagnosticCode, format string, args ...any) {
 	t.Diagnostics = append(t.Diagnostics, Diagnostic{
 		Pos: pos, End: end, Severity: sev, Code: code,
@@ -78,8 +83,7 @@ func (t *Tree) diag(pos, end lex.Pos, sev Severity, code DiagnosticCode, format 
 	})
 }
 
-// Message formats. Centralized so the message-quality pass (plan Task
-// 10) edits one place; analysis-side formats live in analysis/messages.go.
+// Message formats.
 const (
 	msgOrphanEndTag   = `unmatched </%s> is ignored by browsers`
 	msgMisnestedClose = `</%s> also closes <%s>; browsers reopen a copy of <%s> after it`

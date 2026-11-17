@@ -2,9 +2,10 @@ package lex
 
 import "fmt"
 
-// TokenType identifies the type of lex items.
+// TokenType identifies the type of a Token.
 type TokenType int
 
+// The token types of template actions and text.
 const (
 	TokenTypeError        TokenType = iota // error occurred; value is text of error
 	TokenTypeBool                          // boolean constant
@@ -111,6 +112,7 @@ var tokenName = map[TokenType]string{
 	TokenTypeHTMLDoctype:      "HTMLDoctype",
 }
 
+// String returns the type's name.
 func (i TokenType) String() string {
 	s := tokenName[i]
 	if s == "" {

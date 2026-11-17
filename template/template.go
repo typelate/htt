@@ -1,22 +1,19 @@
-// Package html provides muxt with an html/template-compatible, context-aware
-// escaping template engine built on the position-tracking template parser.
+// Package template puts html/template's API over package htt, so that code
+// written for html/template can run on trees that keep positions and count
+// coverage.
 //
-// It is muxt's analysis and coverage engine, and its contextual escaping
-// has documented gaps (see package template's ExecuteTemplate); muxt's
-// generated handlers render with the standard library's html/template,
-// and this package must not be used to render untrusted data for a
-// browser.
+// Its output must not be served: the engine's escaping is weaker than
+// html/template's (see htt.ExecuteTemplate).
 //
-// Its safe-content types are its own; values of the standard library's
-// html/template content types are trusted too.
+// The safe-content types are this package's own. Values of html/template's
+// content types are trusted as well.
 //
-// When the environment variable MUXT_TEMPLATE_COVER (CoverEnv) names a
-// directory at process start, every Execute appends the template blocks
-// it reaches to a cover profile there. muxt test-template-mutations sets
-// it in its coverage pre-pass; unset, nothing is written.
+// When the environment variable named by CoverEnv holds a directory as the
+// process starts, each Execute appends the blocks it reaches to a cover
+// profile there.
 //
-// Derived in part from the Go standard library; see NOTICE.txt at the
-// repository root.
+// Parts of this package derive from the Go standard library; see
+// NOTICE.txt.
 package template
 
 import (
@@ -33,18 +30,13 @@ import (
 	"github.com/typelate/htt/lex"
 )
 
-// FuncMap is the type of the map defining the mapping from names to functions.
-//
-// It is text/template's FuncMap, as in the standard library, so code that
-// names either compiles against this package laid over html/template.
+// FuncMap is text/template's FuncMap, as it is in html/template.
 type FuncMap = texttemplate.FuncMap
 
-// Template is the representation of a parsed template. The *Template
-// returned by New, Parse, and related methods is safe for concurrent use
-// by multiple goroutines once the template has been fully parsed.
+// Template is a parsed template and the set it belongs to. Once parsed it
+// is safe for concurrent use.
 type Template struct {
-	// Tree is the parse tree for this template. It is exported so that
-	// tools can inspect and modify the AST.
+	// Tree is the parse tree, nil until the template is parsed.
 	Tree *htt.Tree
 
 	name   string
@@ -59,7 +51,7 @@ type common struct {
 	rightDelim string
 }
 
-// New allocates a new, undefined template with the given name.
+// New returns an undefined template named name, in a set of its own.
 func New(name string) *Template {
 	t := &Template{
 		name: name,
@@ -70,8 +62,7 @@ func New(name string) *Template {
 	return t
 }
 
-// Must is a helper that wraps a call to a function returning (*Template, error)
-// and panics if the error is non-nil.
+// Must returns t, and panics if err is not nil.
 func Must(t *Template, err error) *Template {
 	if err != nil {
 		panic(err)
@@ -84,8 +75,7 @@ func (t *Template) Name() string {
 	return t.name
 }
 
-// New allocates a new, undefined template associated with the given one
-// and with the same delims.
+// New returns an undefined template named name in t's set.
 func (t *Template) New(name string) *Template {
 	nt := &Template{
 		name:   name,
@@ -95,15 +85,13 @@ func (t *Template) New(name string) *Template {
 	return nt
 }
 
-// Lookup returns the template with the given name that is associated with t.
-// It returns nil if there is no such template. As in html/template, a
-// template declared with New and never parsed is returned with a nil Tree.
+// Lookup returns the template named name in t's set, or nil. A template
+// made with New and not yet parsed has a nil Tree.
 func (t *Template) Lookup(name string) *Template {
 	return t.common.tmpl[name]
 }
 
-// Templates returns a slice of the templates associated with t, including
-// any declared with New and never parsed, as html/template does.
+// Templates returns the templates in t's set, parsed or not.
 func (t *Template) Templates() []*Template {
 	result := make([]*Template, 0, len(t.common.tmpl))
 	for _, tmpl := range t.common.tmpl {
@@ -112,9 +100,9 @@ func (t *Template) Templates() []*Template {
 	return result
 }
 
-// DefinedTemplates returns a string listing the defined templates,
-// prefixed by the string "; defined templates are: ". If there are none,
-// it returns the empty string.
+// DefinedTemplates returns the names of the parsed templates after
+// "; defined templates are: ", or "" when there are none. It is for error
+// messages.
 func (t *Template) DefinedTemplates() string {
 	var names []string
 	for _, tmpl := range t.common.tmpl {
@@ -137,11 +125,8 @@ func (t *Template) DefinedTemplates() string {
 	return b.String()
 }
 
-// Funcs adds the elements of the argument map to the template's function map.
-// It must be called before the template is parsed.
-// It panics if a value in the map is not a function with appropriate return
-// type. However, it is legal to overwrite elements of the map. The return
-// value is the template, so calls can be chained.
+// Funcs adds funcMap to the set's functions, replacing those of the same
+// name. It returns t.
 func (t *Template) Funcs(funcMap FuncMap) *Template {
 	if t.common.funcMap == nil {
 		t.common.funcMap = make(htt.FuncMap)
@@ -152,34 +137,24 @@ func (t *Template) Funcs(funcMap FuncMap) *Template {
 	return t
 }
 
-// Delims sets the action delimiters to the specified strings, to be used in
-// subsequent calls to Parse, ParseFiles, or ParseGlob. Nested template
-// definitions will inherit the settings. An empty delimiter stands for the
-// corresponding default: {{ or }}.
+// Delims sets the action delimiters for later parses in t's set. An empty
+// string stands for the default, {{ or }}. It returns t.
 func (t *Template) Delims(left, right string) *Template {
 	t.common.leftDelim = left
 	t.common.rightDelim = right
 	return t
 }
 
-// Option sets options for the template. Options are described by
-// strings, either a simple string or "key=value". There can be at most one
-// equals sign in an option string. If the option string is unrecognized or
-// otherwise invalid, Option panics.
-//
-// Known options:
-//
-// missingkey: Control the behavior during execution if a map is indexed with
-// a key that is not present in the map.
+// Option sets options for t's set and panics on one it does not know. The
+// only option is missingkey, which says what a map lookup with a missing
+// key evaluates to:
 //
 //	"missingkey=default" or "missingkey=invalid"
-//		The default behavior: Do nothing and continue execution.
-//		If printed, the result of the index operation is the string
-//		"<no value>".
+//		No value, printed as "<no value>". The default.
 //	"missingkey=zero"
-//		The operation returns the zero value for the map type's element.
+//		The zero value of the map's element type.
 //	"missingkey=error"
-//		Execution stops immediately with an error.
+//		Execution stops with an error.
 func (t *Template) Option(opt ...string) *Template {
 	for _, o := range opt {
 		switch {
@@ -202,9 +177,8 @@ func (t *Template) Option(opt ...string) *Template {
 	return t
 }
 
-// Parse parses text as a template body for t. Named template definitions
-// ({{define ...}} or {{block ...}} actions) in text define additional
-// templates associated with t and are removed from the definition of t itself.
+// Parse parses text as the body of t. The templates text defines join t's
+// set.
 func (t *Template) Parse(text string) (*Template, error) {
 	options := t.lexOptions()
 	treeSet := make(map[string]*htt.Tree)
@@ -212,9 +186,8 @@ func (t *Template) Parse(text string) (*Template, error) {
 	if err != nil {
 		return nil, err
 	}
-	// html/template records the name as given, with no file behind it;
-	// ParseTree takes it for a file path. The trees the parser registered
-	// copied the root's names, and Extract copies them from the root.
+	// ParseTree took the name for a file path; html/template records it
+	// as given, with no file behind it.
 	tree.ParseName, tree.Filepath = t.name, ""
 	for _, tr := range treeSet {
 		tr.ParseName, tr.Filepath = t.name, ""
@@ -227,11 +200,8 @@ func (t *Template) Parse(text string) (*Template, error) {
 	return t, nil
 }
 
-// AddParseTree associates the argument parse tree with the template t, giving
-// it the specified name. If the template has not been defined, this tree
-// becomes its definition. If it has been defined and already has that name,
-// the existing definition is replaced; otherwise a new template is created,
-// defined, and returned.
+// AddParseTree adds tree to t's set under name and returns its template.
+// An empty tree does not replace a definition.
 func (t *Template) AddParseTree(name string, tree *htt.Tree) (*Template, error) {
 	tree.HTMLMode = true
 	htt.AnnotateHTMLContexts(tree.Root)
@@ -243,18 +213,14 @@ func (t *Template) AddParseTree(name string, tree *htt.Tree) (*Template, error) 
 		}
 		t.common.tmpl[name] = tmpl
 	}
-	// As html/template does, an empty tree does not replace one the
-	// template already has.
 	if tmpl.Tree == nil || !htt.IsEmptyTree(tree.Root) {
 		tmpl.Tree = tree
 	}
 	return tmpl, nil
 }
 
-// Clone returns a duplicate of the template, including all associated
-// templates. The actual representations are not copied, but the name space
-// of associated templates is, so further calls to Parse in the copy will
-// add templates to the copy but not to the original.
+// Clone returns a copy of t and its set. The trees are shared; templates
+// parsed into the copy do not reach the original.
 func (t *Template) Clone() (*Template, error) {
 	nt := &Template{
 		name: t.name,
@@ -283,24 +249,14 @@ func (t *Template) Clone() (*Template, error) {
 	return nt, nil
 }
 
-// Execute applies a parsed template to the specified data object,
-// writing the output to wr.
-//
-// Execute is a static-analysis and coverage engine, not a replacement for
-// html/template: it is not safe for serving HTTP responses. Its escaping
-// has the known gaps documented on template.ExecuteTemplate (actions in
-// attribute-name position, text sub-templates executed without the
-// caller's context, and style and srcdoc attribute values).
+// Execute applies t to data and writes the output to wr. The output must
+// not be served; see htt.ExecuteTemplate.
 func (t *Template) Execute(wr io.Writer, data any) error {
 	return t.execute(wr, t.name, data)
 }
 
-// ExecuteTemplate applies the template associated with t that has the given
-// name to the specified data object and writes the output to wr.
-//
-// Like Execute, it is a static-analysis and coverage engine, not safe for
-// serving HTTP responses; see template.ExecuteTemplate for the known
-// escaping gaps.
+// ExecuteTemplate applies the template named name in t's set to data and
+// writes the output to wr. The output must not be served.
 func (t *Template) ExecuteTemplate(wr io.Writer, name string, data any) error {
 	tmpl := t.Lookup(name)
 	if tmpl == nil || tmpl.Tree == nil {
@@ -321,26 +277,22 @@ func (t *Template) execute(wr io.Writer, name string, data any) error {
 	return htt.ExecuteTemplate(wr, tmpl.Tree, data, opts...)
 }
 
-// ParseFiles parses the named files and associates the resulting templates
-// with t. If an error occurs, parsing stops and the returned template is nil;
-// otherwise it is t.
+// ParseFiles parses the named files into t's set, each as a template named
+// for its base name.
 func (t *Template) ParseFiles(filenames ...string) (*Template, error) {
 	return parseFiles(t, readFileOS, filenames...)
 }
 
-// ParseGlob parses the template definitions in the files identified by the
-// pattern and associates the resulting templates with t.
+// ParseGlob is ParseFiles for the files that match pattern.
 func (t *Template) ParseGlob(pattern string) (*Template, error) {
 	return parseGlob(t, pattern)
 }
 
-// ParseFS is like ParseFiles or ParseGlob but reads from the file system
-// fsys instead of the host operating system's file system.
+// ParseFS is ParseFiles for the files in fsys that match patterns.
 func (t *Template) ParseFS(fsys fs.FS, patterns ...string) (*Template, error) {
 	return parseFS(t, fsys, patterns...)
 }
 
-// execOptions builds a slice of htt.Option from the template's configuration.
 func (t *Template) execOptions() []htt.Option {
 	opts := []htt.Option{htt.WithTrust(trustOf)}
 	if t.common.funcMap != nil {
@@ -360,7 +312,6 @@ func (t *Template) execOptions() []htt.Option {
 	return opts
 }
 
-// lexOptions builds lex.Options from the template's configuration.
 func (t *Template) lexOptions() lex.Options {
 	var hasBreak, hasContinue bool
 	if t.common.funcMap != nil {

@@ -1,16 +1,14 @@
 package htt
 
-// Walk traverses the tree in source order, pre-order, calling fn for
-// each node. It is a thin wrapper over WalkPath.
+// Walk calls fn for each node of tree in source order, a parent before its
+// children. It does not enter actions.
 func Walk(tree *Tree, fn func(*Tree, Node)) {
 	WalkPath(tree, func(t *Tree, _ []Node, n Node) { fn(t, n) })
 }
 
-// WalkPath traverses like Walk but also passes the stack of ancestor
-// nodes, outermost first. Branch nodes (IfNode, RangeNode, WithNode)
-// and list nodes appear in the path so callers can observe control
-// flow between elements. fn must not retain path after returning; the
-// backing array is reused.
+// WalkPath is Walk with the node's ancestors, outermost first. The path
+// includes list and branch nodes. fn must not keep path, whose array is
+// reused.
 func WalkPath(tree *Tree, fn func(t *Tree, path []Node, n Node)) {
 	if tree == nil || tree.Root == nil {
 		return

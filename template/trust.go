@@ -7,8 +7,7 @@ import (
 )
 
 // contentTrust is the Trust of each safe-content type, by name. The names
-// are the same in this package and in the standard library's
-// html/template.
+// are html/template's.
 var contentTrust = map[string]htt.Trust{
 	"HTML":     htt.TrustHTML,
 	"URL":      htt.TrustURL,
@@ -22,17 +21,12 @@ var contentTrust = map[string]htt.Trust{
 // pkgPath is this package's import path, as its types report it.
 var pkgPath = reflect.TypeFor[HTML]().PkgPath()
 
-// stdlibPkgPath is the standard library's html/template. Code running
-// this package in process may pass its content types, which are distinct
-// from this package's; they are recognized by name, since importing
-// html/template here would make it import itself where muxt lays this
-// package over it.
+// stdlibPkgPath is html/template's import path. Its content types are
+// recognized by name, since this package cannot import it.
 const stdlibPkgPath = "html/template"
 
-// trustOf classifies a value's Trust kind for the htt engine. It recognizes
-// this package's safe-content types and the standard library's
-// html/template ones so they bypass the matching contextual escaper,
-// restoring the trust-type semantics promised by the html/template API.
+// trustOf returns the Trust of v: that of a safe-content type of this
+// package or of html/template, and TrustNone otherwise.
 func trustOf(v reflect.Value) htt.Trust {
 	if !v.IsValid() {
 		return htt.TrustNone

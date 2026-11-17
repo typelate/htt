@@ -15,15 +15,11 @@ const (
 	tagUnknown                    // in markup the scan cannot follow
 )
 
-// tagScan follows the template's own text, as it is written, through a
-// tag the parser left as text, such as <p {{.Name}}=v> or
-// <p data-{{.Name}}=v>, with the transitions of html/template's
-// escaper. The engine writes such a tag as text, so an action in it
-// must be escaped for where it stands: as an attribute name, or as an
-// attribute value between the value's quotes. html/template follows
-// the template's source and refuses one whose branches end in
-// different places; the engine follows what is written, branch by
-// branch and through called templates.
+// tagScan follows the template's text through a tag the parser left as
+// text, such as <p {{.Name}}=v>, with the transitions of html/template's
+// escaper. An action in such a tag is escaped for where it stands: an
+// attribute name or a value. html/template follows the source and refuses
+// branches that end in different places; this follows what is written.
 type tagScan struct {
 	part    tagPart
 	element string // the tag's name, lowercased
@@ -40,10 +36,9 @@ func (t tagScan) text(s string) tagScan {
 	return t
 }
 
-// write returns the template text s as html/template writes it, with
-// the scan after it: outside a tag, a '<' that starts no tag, comment
-// or doctype is written "&lt;", so that what follows it, an action's
-// output above all, is text and not a tag's name.
+// write returns s as html/template writes it, with the scan after it.
+// Outside a tag, a '<' that starts no tag, comment or doctype becomes
+// "&lt;", so that an action after it cannot name a tag.
 func (t tagScan) write(s string) (string, tagScan) {
 	var out strings.Builder
 	for len(s) > 0 && t.part != tagUnknown {
@@ -84,10 +79,8 @@ func (t tagScan) write(s string) (string, tagScan) {
 	return out.String(), t
 }
 
-// step consumes the start of s, which is not empty, in a tag, and
-// returns the scan after it with the rest of s. It follows
-// html/template's transitions for a tag, an attribute name and an
-// attribute value.
+// step consumes the start of s, which is not empty and in a tag. It
+// returns the scan after it and the rest of s.
 func (t tagScan) step(s string) (tagScan, string) {
 	switch t.part {
 	case tagStart:
@@ -179,12 +172,10 @@ func (t tagScan) action() (at, after tagScan) {
 	return t, t
 }
 
-// valueAttr is an attribute whose values are escaped as html/template
-// escapes the values of the attribute named name, of which only the
-// leading text may be known, as in on{{.Event}}="…". html/template
-// goes by the name's shape: any name starting with "on" holds script,
-// and a name holding "src", "uri" or "url" holds a URL, after a "data-"
-// or namespace prefix is taken off.
+// valueAttr returns an attribute whose values are escaped as
+// html/template escapes those of name. Only the start of name may be
+// known, as in on{{.Event}}, so html/template goes by its shape: "on"
+// starts a script handler, and "src", "uri" or "url" marks a URL.
 func valueAttr(name string) string {
 	short := name
 	if after, ok := strings.CutPrefix(name, "data-"); ok {
@@ -257,10 +248,9 @@ func isASCIIDigit(c byte) bool { return '0' <= c && c <= '9' }
 const filterFailsafe = "ZgotmplZ"
 
 // htmlNameFilter is html/template's filter for an action that writes an
-// attribute name: the lowercased name when it is letters and digits and
-// names an attribute with a plain text value, ZgotmplZ otherwise, so
-// that data cannot name an event handler or a URL attribute, or end the
-// name. A value trusted as an attribute is written as it is.
+// attribute name. It returns the lowercased name when that is letters and
+// digits naming a plain-text attribute, and ZgotmplZ otherwise. A value
+// trusted as an attribute is written as it is.
 func htmlNameFilter(s string, trust Trust) string {
 	if trust == TrustHTMLAttr {
 		return s
@@ -281,8 +271,7 @@ func htmlNameFilter(s string, trust Trust) string {
 }
 
 // plainAttr reports whether html/template takes the value of the named
-// attribute, which is lowercase, for plain text: not a URL, script,
-// style or srcset, and not a value it calls unsafe to set from data.
+// attribute, which is lowercase, for plain text that data may set.
 func plainAttr(name string) bool {
 	switch name {
 	case "accept-charset", "action", "archive", "async", "background", "cite",
@@ -300,10 +289,8 @@ func plainAttr(name string) bool {
 	return !strings.Contains(name, "src") && !strings.Contains(name, "uri") && !strings.Contains(name, "url")
 }
 
-// holdsEscapableText reports whether html/template reads the text in
-// the named element, textarea or title, as text in which a '<' starts
-// no tag, and writes each one "&lt;". A browser reads it so in HTML,
-// but as markup in SVG and MathML.
+// holdsEscapableText reports whether element is textarea or title, in
+// which html/template writes each '<' as "&lt;".
 func holdsEscapableText(element string) bool {
 	switch strings.ToLower(element) {
 	case "textarea", "title":

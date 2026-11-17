@@ -19,25 +19,14 @@ type Tree struct {
 	ParseName string    // name of the top-level template during parsing, for error messages.
 	Filepath  string    // absolute file path, if known.
 	Root      *ListNode // top-level root of the tree.
-	// HTMLMode reports that this tree was parsed in HTML mode and must be
-	// executed through the HTML walker so contextual escaping is applied
-	// even when the root has no HTMLDocumentFragmentNode (for example, an
-	// extracted block or a tree composed via AddParseTree).
+	// HTMLMode says the tree executes with contextual escaping, whatever
+	// its root holds.
 	HTMLMode bool
-	// Diagnostics collects non-fatal structural findings recorded
-	// during parsing. See analysis.CheckStructure, which merges these
-	// with AST-walk findings.
+	// Diagnostics holds the structural findings recorded while parsing.
 	Diagnostics Diagnostics
-	// RootTrimFirst and RootTrimLast carry a {{define ... -}}/{{- end}} or
-	// {{block ... -}}/{{- end}} node's own StartTrimRight/EndTrimLeft flags
-	// onto the standalone Tree Extract builds from its Body. A DefineNode
-	// or BlockNode's trim markers are otherwise only meaningful relative to
-	// siblings in the tree that contained it — walkHTMLList's trimFirst and
-	// trimLast parameters — but once extracted, the body has no such
-	// siblings; its own root-level whitespace is never trimmed unless the
-	// extracting node's flags are carried forward here and honored where
-	// the tree is executed as a root (executeHTMLList and the
-	// {{template}}-node HTML walker).
+	// RootTrimFirst and RootTrimLast are the trim markers of the {{define}}
+	// or {{block}} whose body is this tree's root: -}} on the opener and
+	// {{- on the end.
 	RootTrimFirst, RootTrimLast bool
 	text                        string // text parsed to create the template (or its parent)
 	leftDelim, rightDelim       string // action delimiters text was parsed with
@@ -73,12 +62,10 @@ func init() {
 	}
 }
 
-// ParseTree returns a map from template name to [Tree], created by parsing the
-// templates described in the argument string. The top-level template will be
-// given the specified name. If an error is encountered, parsing stops and an
-// empty map is returned with the error.
-//
-// Use filepath.FromSlash on the fileName, ParseTree expects a slash separated filepath.
+// ParseTree parses text and returns the tree of the template named
+// templateName. It adds that tree, and one for each {{define}} and
+// {{block}} in text, to treeSet, which may be nil. fileName is a
+// slash-separated path used in positions and error messages.
 func ParseTree(fileName, templateName, text string, treeSet map[string]*Tree, options lex.Options) (*Tree, error) {
 	if treeSet == nil {
 		treeSet = make(map[string]*Tree)
@@ -168,22 +155,22 @@ func (t *Tree) peekNonSpace() lex.Token {
 	return token
 }
 
+// Position is a 1-based line and column in a template's source.
 type Position struct {
 	ParseName    string
 	Line, Column int
-	Source       string
+	Source       string // the text of the node, when the position is a node's
 }
 
+// String formats p as name:line:column.
 func (p Position) String() string {
 	return fmt.Sprintf("%s:%d:%d", p.ParseName, p.Line, p.Column)
 }
 
-// RootStart returns the offset where text/template's parser started the
-// tree's root list. Its lexer dropped the whitespace a {{define ... -}} or
-// {{block ... -}} clause trims, so the list began at the first byte the
-// template writes, or at the action after the trimmed space. This parser
-// keeps that whitespace as text, trimmed at execution, and starts the
-// list right after the clause.
+// RootStart returns the offset at which text/template would start this
+// tree's root list. The two differ after {{define ... -}} and
+// {{block ... -}}: text/template drops the trimmed space while lexing, and
+// this parser keeps it as text.
 func (t *Tree) RootStart() lex.Pos {
 	root := t.Root
 	if root == nil {
@@ -205,8 +192,8 @@ func (t *Tree) RootStart() lex.Pos {
 	return root.End()
 }
 
-// Source returns the text the tree was parsed from: the whole file or
-// string, with the text of the other templates it defines.
+// Source returns the whole text the tree was parsed from, which may define
+// other templates too.
 func (t *Tree) Source() string { return t.text }
 
 // Delims returns the action delimiters the tree was parsed with.
@@ -214,7 +201,7 @@ func (t *Tree) Delims() (left, right string) {
 	return cmp.Or(t.leftDelim, "{{"), cmp.Or(t.rightDelim, "}}")
 }
 
-// PositionAt computes the line and column (both 1-based) for a byte offset in the template text.
+// PositionAt returns the line and column of a byte offset in the source.
 func (t *Tree) PositionAt(pos lex.Pos) Position {
 	p := int(pos)
 	text := t.text[:p]
@@ -233,6 +220,7 @@ func (t *Tree) PositionAt(pos lex.Pos) Position {
 	}
 }
 
+// Position returns the position of n's start, with n's source text.
 func (t *Tree) Position(n Node) Position {
 	tree := n.tree()
 	if tree == nil {
@@ -244,12 +232,8 @@ func (t *Tree) Position(n Node) Position {
 	return p
 }
 
-// ParseError is a template parse failure located at a byte span in the
-// template text. Its Error string keeps the historical
-// "template: <name>:<line>: <message>" form, so callers and tests that
-// match on it are unaffected; the Unwrap, Position, and EndPosition
-// methods let tooling place a diagnostic and read the position-free
-// message without parsing that string.
+// ParseError is a parse failure with its place in the template text. Error
+// keeps text/template's "template: name:line: message" form.
 type ParseError struct {
 	err                error  // the bare cause; Error prefixes it with the location
 	name               string // ParseName, as it appears in the Error string
@@ -263,17 +247,15 @@ func (e *ParseError) Error() string {
 	return fmt.Sprintf("template: %s:%d: %s", e.name, e.line, e.err.Error())
 }
 
-// Unwrap returns the bare cause — the message without the location prefix.
+// Unwrap returns the cause, whose message has no location prefix.
 func (e *ParseError) Unwrap() error { return e.err }
 
-// Position returns the start of the failing token as a token.Position; its
-// Offset is the byte offset into the template text.
+// Position returns where the failing token starts.
 func (e *ParseError) Position() token.Position {
 	return token.Position{Filename: e.file, Offset: int(e.start), Line: e.line, Column: e.column}
 }
 
-// EndPosition returns the exclusive end of the failing token, the companion
-// to Position for a ranged diagnostic.
+// EndPosition returns the position just past the failing token.
 func (e *ParseError) EndPosition() token.Position {
 	return token.Position{Filename: e.file, Offset: int(e.end), Line: e.endLine, Column: e.endColumn}
 }
@@ -330,9 +312,8 @@ func (t *Tree) unexpected(token lex.Token, context string) error {
 	return t.errorf("unexpected %s in %s", token, context)
 }
 
-// hasFunction reports whether name is a function a template may call, as
-// text/template's parser checks it: a builtin or a registered function.
-// With no function names given (lex.Options.Functions), every name is.
+// hasFunction reports whether a template may call name: a registered
+// function or a builtin, or any name when none were registered.
 func (t *Tree) hasFunction(name string) bool {
 	if t.functions == nil || t.functions[name] {
 		return true
@@ -367,10 +348,9 @@ func (t *Tree) add() error {
 	return nil
 }
 
-// addDefinition registers the tree a define or block clause defines in the
-// parser's tree set, as text/template's add does: it replaces a tree of the
-// same name only when that one is empty, and two that are not empty are an
-// error, located at the clause that defined the name again.
+// addDefinition registers the tree of a define or block as text/template
+// does: it replaces an empty tree of the same name, and two that are not
+// empty are an error.
 func (t *Tree) addDefinition(tree *Tree) error {
 	existing := t.treeSet[tree.Name]
 	if existing == nil || IsEmptyTree(existing.Root) {
@@ -383,7 +363,7 @@ func (t *Tree) addDefinition(tree *Tree) error {
 	return nil
 }
 
-// IsEmptyTree reports whether this tree (node) is empty of everything but space or comments.
+// IsEmptyTree reports whether n holds nothing but space and comments.
 func IsEmptyTree(n Node) bool {
 	switch n := n.(type) {
 	case nil:
@@ -769,13 +749,9 @@ func (t *Tree) parseControl(context string) (pos lex.Pos, endPos lex.Pos, line i
 		// the subsequent{{end}} is assumed. This technique works even for long if-else-if chains.
 		if context == "if" && t.peek().Type == lex.TokenTypeIf {
 			t.next() // Consume the "if" token.
-			// Restore actionTrimLeft for the inner parseControl — the
-			// defer in textOrAction already cleared it, but the inner
-			// branch shares the same {{- opening delimiter as the else.
+			// The chained if shares the else's {{- and starts at the
+			// {{else if}} action; textOrAction's defer cleared both.
 			t.actionTrimLeft = n.TrimLeft
-			// Likewise the chained if starts at the {{else if}} action
-			// (the defer cleared actionPos too), and the else list spans
-			// the chain through its shared {{end}}.
 			t.actionPos = next.Start()
 			elseList = t.newList(next.Start())
 			var ifNode Node
@@ -959,8 +935,7 @@ func (t *Tree) blockControl() (Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	// pipeline sets t.actionTrimRight from the right delimiter it just
-	// consumed — the -}} on {{block "name" pipeline -}}, if any.
+	// pipeline left the opener's -}} in t.actionTrimRight.
 	startTrimRight := t.actionTrimRight
 
 	var end Node
@@ -974,17 +949,9 @@ func (t *Tree) blockControl() (Node, error) {
 		return nil, t.errorf("unexpected %s in %s", end, context)
 	}
 
-	// Register the block body in the treeSet so it is available for
-	// {{template}} lookups, matching text/template behavior. This is the
-	// canonical Tree for the block: template/template.go's Parse merges it
-	// straight from treeSet into the running template set, and
-	// check/internal/asteval's static loader captures it the same way, so
-	// RootTrimFirst/RootTrimLast set here reach both real execution and
-	// static analysis. It must carry the block's own -}}/{{- trim markers
-	// (not the enclosing scope's — this tree has no siblings once
-	// extracted, so nothing else could ever apply them) or a route whose
-	// handler is a {{block}} keeps stray leading/trailing whitespace from
-	// its opening and closing delimiters at render time.
+	// Register the body as the block's tree, as text/template does. It
+	// carries the block's own trim markers: once the body is a tree of its
+	// own, nothing else applies them.
 	block := &Tree{Name: name}
 	block.Root = body
 	block.text = t.text

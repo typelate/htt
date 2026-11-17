@@ -27,24 +27,22 @@ type state struct {
 	missingKey MissingKeyMode
 	trust      TrustFunc
 	markup     *markup // what the source writes that html.Node cannot hold; nil records nothing
-	// attrSource, while a control structure in an attribute value is
-	// walked, holds the text nodes made from the template's own text,
-	// which alone are written as they are; nil otherwise.
+	// attrSource is set while a control structure in an attribute value
+	// is walked. It holds the text nodes made from the template's own
+	// text, which alone are written unescaped.
 	attrSource map[*html.Node]bool
-	// scan follows the template text written so far through tags the
-	// parser left as text, shared with the templates called. rawText
-	// is set where text is written as it is and not followed: in
-	// script and style, and in a template called from an attribute
-	// value. escapableText is set in textarea and title, where each
-	// '<' of the text is escaped and nothing is followed.
+	// scan follows the text written so far through tags the parser left
+	// as text; called templates share it. rawText marks script, style and
+	// a template called from an attribute value, where text is not
+	// followed. escapableText marks textarea and title, where each '<' is
+	// escaped.
 	scan          *tagScan
 	rawText       bool
 	escapableText bool
 }
 
-// tagAt returns the scan of the text written so far, or nil where text
-// is not followed: where the template's text is escaped when rendered,
-// not written as it is, in an attribute value, and in raw text.
+// tagAt returns the scan of the text written so far, or nil where text is
+// not followed.
 func (s *state) tagAt() *tagScan {
 	if s.markup == nil || s.rawText || s.escapableText || s.attrSource != nil {
 		return nil
@@ -55,9 +53,8 @@ func (s *state) tagAt() *tagScan {
 	return s.scan
 }
 
-// writeText returns the template text as html/template writes it: where
-// text is followed, a '<' that starts no tag is escaped, so that an
-// action after it cannot name a tag.
+// writeText returns text as html/template writes it: a '<' that starts no
+// tag is escaped, so that an action after it cannot name one.
 func (s *state) writeText(text string) string {
 	if at := s.tagAt(); at != nil {
 		text, *at = at.write(text)
@@ -69,8 +66,7 @@ func (s *state) writeText(text string) string {
 	return text
 }
 
-// trustOf reports the Trust classification for a value, returning
-// TrustNone when no TrustFunc was provided.
+// trustOf returns v's Trust, which is TrustNone without a TrustFunc.
 func (s *state) trustOf(v reflect.Value) Trust {
 	if s.trust == nil {
 		return TrustNone
@@ -84,15 +80,13 @@ func (s *state) execute(dot reflect.Value) error {
 	if root == nil {
 		return nil
 	}
-	// Check if the root's first child is an HTMLDocumentFragmentNode.
 	if len(root.Nodes) == 1 {
 		if frag, ok := root.Nodes[0].(*HTMLDocumentFragmentNode); ok {
 			return s.executeHTML(dot, frag)
 		}
 	}
-	// Check if the root contains HTML nodes (e.g., from extracted {{define}}
-	// blocks in HTML templates), or the tree was parsed in HTML mode. Both
-	// require the HTML execution path so contextual escaping applies.
+	// The tree of a define or block has no fragment, and still needs
+	// contextual escaping.
 	if s.tree.HTMLMode || rootHasHTMLNodes(root) {
 		return s.executeHTMLList(dot, root)
 	}
@@ -107,13 +101,8 @@ func (s *state) executeHTML(dot reflect.Value, frag *HTMLDocumentFragmentNode) e
 	return render(s.wr, doc, s.markup)
 }
 
-// executeHTMLList handles a ListNode that contains HTML nodes directly
-// (without an HTMLDocumentFragmentNode wrapper). This occurs for trees
-// extracted from {{define}} or {{block}} in HTML-mode templates.
-// RootTrimFirst/RootTrimLast (set by extract.go and blockControl) carry
-// the defining {{define ... -}}/{{block ... -}} and {{- end}} node's own
-// trim markers, which would otherwise be lost: the body has no siblings
-// once it is its own tree, so nothing else could apply them.
+// executeHTMLList executes a root list that holds HTML nodes with no
+// fragment around them, as the tree of a define or block does.
 func (s *state) executeHTMLList(dot reflect.Value, list *ListNode) error {
 	nodes, err := s.walkHTMLList(dot, list, s.tree.RootTrimFirst, s.tree.RootTrimLast)
 	if err != nil {
@@ -126,8 +115,8 @@ func (s *state) executeHTMLList(dot reflect.Value, list *ListNode) error {
 	return render(s.wr, doc, s.markup)
 }
 
-// rootHasHTMLNodes reports whether a ListNode contains any HTML-specific
-// node types (HTMLElementNode, HTMLCommentNode, HTMLDoctypeNode).
+// rootHasHTMLNodes reports whether list holds an element, comment or
+// doctype.
 func rootHasHTMLNodes(list *ListNode) bool {
 	for _, n := range list.Nodes {
 		switch n.(type) {
@@ -179,12 +168,11 @@ func (s *state) walk(dot reflect.Value, node Node) error {
 		n.count.Add(1)
 		return continueError{}
 	case *CommentNode:
-		// ExecuteTemplate comments produce no output.
+		// A template comment writes nothing.
 	case *DefineNode:
-		// Define nodes are processed at parse time, not execution time.
+		// A definition writes nothing where it stands.
 	case *BlockNode:
-		// Block nodes act like {{template "name" pipeline}} at execution time.
-		// Extract() should have registered the block body as a named template.
+		// A block executes as a call of the template it defines.
 		return s.walkTemplateNode(dot, s.tree.newTemplate(n.Start(), n.End(), n.Line, n.Name, n.Pipe))
 	default:
 		return s.errorf("unknown node: %s", node)
@@ -644,11 +632,9 @@ func (s *state) evalFieldChain(dot, receiver reflect.Value, ident []string, args
 	n := len(ident)
 	for i := 0; i < n-1; i++ {
 		var err error
-		// A non-final field is always a zero-argument field or method
-		// access. evalCall treats args[0] as the implicit word and counts
-		// len(args)-1 fixed arguments, so a zero-arg access must pass the
-		// one-element sentinel (not nil, which would count as -1 and reject
-		// a genuine zero-parameter method such as .Result.Name).
+		// zeroArgSentinel, not nil: evalCall counts len(args)-1
+		// arguments, and nil would count -1 and reject a method that
+		// takes none.
 		receiver, err = s.evalField(dot, ident[i], zeroArgSentinel, missingVal, receiver)
 		if err != nil {
 			return missingVal, err
@@ -657,19 +643,15 @@ func (s *state) evalFieldChain(dot, receiver reflect.Value, ident []string, args
 	return s.evalField(dot, ident[n-1], args, final, receiver)
 }
 
-// zeroArgSentinel is a one-element argument slice representing a
-// zero-argument field or method access under evalCall's args[0]-is-the-word
-// convention. Its sole element is never dereferenced.
+// zeroArgSentinel is the args of a field or method access with no
+// arguments. evalCall takes args[0] for the word itself and never reads it.
 var zeroArgSentinel = []Node{nil}
 
 func (s *state) evalFunction(dot reflect.Value, node *IdentifierNode, cmd *CommandNode, args []Node, final reflect.Value) (reflect.Value, error) {
 	name := node.Ident
-	// The built-in and/or short-circuit: they evaluate arguments left to
-	// right and stop at the first that decides the result (an empty argument
-	// for and, a non-empty one for or), matching text/template since Go 1.18.
-	// A user-supplied func of the same name is a normal call, not short-
-	// circuited; and a zero-argument and/or falls through to report the
-	// usual arg-count error.
+	// The builtin and/or evaluate their arguments lazily, as in
+	// text/template. A user function of either name is an ordinary call,
+	// and one with no arguments falls through to the arg-count error.
 	if name == "and" || name == "or" {
 		if _, overridden := s.funcs[name]; !overridden && (len(args) > 1 || final.IsValid()) {
 			return s.evalAndOr(dot, name, args, final)
@@ -682,11 +664,8 @@ func (s *state) evalFunction(dot reflect.Value, node *IdentifierNode, cmd *Comma
 	return s.evalCall(dot, fn, cmd, name, args, final)
 }
 
-// evalAndOr evaluates a built-in and/or over its operands (args[1:] then the
-// piped final value) left to right, short-circuiting. It returns the operand
-// that decides the result — the first empty one for and, the first non-empty
-// one for or — or the last operand when none decides, without evaluating any
-// operand past the decider.
+// evalAndOr evaluates the builtin and/or over args[1:] and then final, left
+// to right, and stops at the operand that decides the result.
 func (s *state) evalAndOr(dot reflect.Value, name string, args []Node, final reflect.Value) (reflect.Value, error) {
 	returnOnTruth := name == "or"
 	var result reflect.Value
@@ -744,10 +723,7 @@ func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, fina
 	if hasArgs {
 		return missingVal, s.errorf("can't call method/function %q on %s", fieldName, typ)
 	}
-	// Try struct fields, dereferencing a pointer receiver first (methods
-	// were already tried above on both the pointer and the value; a bare
-	// struct field is only reachable through the pointer's Elem, e.g.
-	// *http.Request.Pattern).
+	// A field is reached through the pointer's Elem.
 	structReceiver, isNil := indirect(receiver)
 	if isNil {
 		return missingVal, s.errorf("nil pointer evaluating field %s in type %s", fieldName, typ)
@@ -861,12 +837,7 @@ func (s *state) evalArg(dot reflect.Value, typ reflect.Type, n Node) (reflect.Va
 		}
 		return reflect.ValueOf(nil), nil
 	case *FieldNode:
-		// zeroArgSentinel, not nil: a bare field/method reference used as
-		// one argument among several (e.g. .Result in {{printf "%v"
-		// .Result}}) still reaches evalCall for its final segment, which
-		// computes fixed-arg count as len(args)-1. nil would compute -1 and
-		// reject a genuine zero-parameter method the same way an
-		// unguarded non-final chain segment once did (see evalFieldChain).
+		// zeroArgSentinel, not nil: see evalFieldChain.
 		return s.evalFieldNode(dot, arg, zeroArgSentinel, missingVal)
 	case *VariableNode:
 		return s.evalVariableNode(dot, arg, zeroArgSentinel, missingVal)
@@ -899,18 +870,9 @@ func (s *state) printValue(wr io.Writer, v reflect.Value) (int, error) {
 	return wr.Write([]byte(text))
 }
 
-// printableValue returns the value fmt.Sprint should receive to print v:
-// v itself for anything that isn't a pointer, or, for a pointer, the
-// pointer's Elem when neither implements error or fmt.Stringer, so a nil
-// pointer prints as "<nil>" instead of panicking a String/Error method
-// on a nil receiver — the same tradeoff text/template makes.
-//
-// A pointer whose element type implements error/Stringer only through a
-// pointer receiver (the common case: TemplateData's generated String
-// method) must NOT be dereferenced — doing so would drop to the value
-// type, which does not implement the interface, and fall through to a
-// raw %v of every field. So the interface check runs on v before any
-// dereferencing, not after.
+// printableValue returns what fmt.Sprint should print for v. A pointer is
+// dereferenced, so that a nil one prints "<nil>", unless it implements
+// error or fmt.Stringer: a method on the pointer receiver would be lost.
 func printableValue(v reflect.Value) any {
 	if v.Type().Implements(errorType) || v.Type().Implements(stringerType) {
 		if v.CanInterface() {
@@ -931,9 +893,9 @@ func printableValue(v reflect.Value) any {
 
 var stringerType = reflect.TypeFor[fmt.Stringer]()
 
-// htmlActionText is the text an action with the value v writes in HTML,
-// before escaping, with the trust of v: nothing for a nil interface,
-// which html/template skips, and "<no value>" for no value at all.
+// htmlActionText returns the text an action with the value v writes in
+// HTML, before escaping, and v's trust. A nil interface writes nothing, as
+// in html/template.
 func (s *state) htmlActionText(v reflect.Value) (string, Trust, error) {
 	if !v.IsValid() {
 		return "<no value>", TrustNone, nil
@@ -979,8 +941,7 @@ func (s *state) varValue(name string) reflect.Value {
 
 // HTML walk methods
 
-// walkHTMLNode dispatches to the appropriate HTML walk method.
-// Returns a slice of html.Node to append to a parent.
+// walkHTMLNode executes one node and returns the html.Nodes it makes.
 func (s *state) walkHTMLNode(dot reflect.Value, node Node) ([]*html.Node, error) {
 	switch n := node.(type) {
 	case *HTMLElementNode:
@@ -1028,7 +989,7 @@ func (s *state) walkHTMLNode(dot reflect.Value, node Node) ([]*html.Node, error)
 		// Skip define nodes during execution.
 		return nil, nil
 	case *BlockNode:
-		// Block nodes act like {{template "name" pipeline}} at execution time.
+		// A block executes as a call of the template it defines.
 		return s.walkHTMLTemplate(dot, s.tree.newTemplate(n.Start(), n.End(), n.Line, n.Name, n.Pipe))
 	case *BreakNode:
 		n.count.Add(1)
@@ -1037,7 +998,7 @@ func (s *state) walkHTMLNode(dot reflect.Value, node Node) ([]*html.Node, error)
 		n.count.Add(1)
 		return nil, continueError{}
 	case *CommentNode:
-		// ExecuteTemplate comments produce no output.
+		// A template comment writes nothing.
 		return nil, nil
 	default:
 		return nil, s.errorf("unsupported HTML node type: %T", node)
@@ -1130,11 +1091,9 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 	return n, nil
 }
 
-// evalAttrNameAction evaluates an action that stands where an attribute
-// does, as in <p {{.Name}}>: its output is an attribute name, filtered as
-// html/template filters it, so that data cannot name an event handler or
-// write a value. It reports false for an action that writes nothing, a
-// variable declaration.
+// evalAttrNameAction evaluates an action written where an attribute is, as
+// in <p {{.Name}}>. Its output is filtered as an attribute name. It reports
+// false for a variable declaration, which writes nothing.
 func (s *state) evalAttrNameAction(dot reflect.Value, action *ActionNode) (sourceAttr, bool, error) {
 	action.count.Add(1)
 	val, err := s.evalPipeline(dot, action.Pipe)
@@ -1154,18 +1113,14 @@ func (s *state) evalAttrNameAction(dot reflect.Value, action *ActionNode) (sourc
 func (s *state) evalHTMLAttribute(dot reflect.Value, attr *HTMLAttributeNode) (sourceAttr, error) {
 	ns := attr.Namespace
 
-	// Reject dynamic attribute names. Allowing actions in attribute-name
-	// position lets a template's data choose what attribute is emitted —
-	// for example, picking "onclick" — which silently bypasses the URL
-	// and event-handler escapers, since their dispatch is keyed on the
-	// statically known attribute name.
+	// An action in the name would let data pick the attribute, onclick
+	// say, past the escapers that go by the name.
 	for _, k := range attr.Key {
 		if _, ok := k.(*TextNode); !ok {
 			return sourceAttr{}, s.errorf("dynamic attribute names are not permitted (template action found in attribute name)")
 		}
 	}
 
-	// Evaluate key.
 	var keyBuf bytes.Buffer
 	for _, k := range attr.Key {
 		if tn, ok := k.(*TextNode); ok {
@@ -1209,12 +1164,9 @@ func unquoteAttr(s string, quote byte) string {
 	return strings.TrimSuffix(s, string(quote))
 }
 
-// evalHTMLAttrValueNodes evaluates the AST nodes of an HTML attribute
-// value, writing to val the value's text and to raw the value as
-// html/template writes it between quote (0 for none): static text as the
-// source has it, and each action's output escaped for the quote. Control
-// structures (if, with, range) are walked with the HTML node dispatcher
-// and the text taken from the resulting html.Node slice.
+// evalHTMLAttrValueNodes evaluates the nodes of an attribute value. It
+// writes the value to val and, to raw, the value as html/template writes
+// it between quote (0 for none).
 func (s *state) evalHTMLAttrValueNodes(dot reflect.Value, nodes []Node, quote byte, val, raw *strings.Builder) error {
 	for _, v := range nodes {
 		switch vn := v.(type) {
@@ -1287,15 +1239,9 @@ func (s *state) walkHTMLAction(dot reflect.Value, action *ActionNode) ([]*html.N
 		return nil, s.errorf("can't print %s of type %s", val, val.Type())
 	}
 	trust := s.trustOf(val)
-	// A non-string value landing directly in a <script> expression
-	// position (e.g. {{.Result}} where Result is a struct or slice, the
-	// shape a JSON-hydration <script> tag takes) renders as a JS literal
-	// via json.Marshal, matching html/template's jsValEscaper — not as
-	// Go's %v syntax wrapped in a JS string, which is neither valid JS
-	// for a composite value nor what the template author intended.
-	// TrustJS/TrustJSStr are explicit opt-outs the escapeAction path
-	// below already honors; a value under either trust kind is left to
-	// that path so it is never double-escaped.
+	// In a script expression a value that is not a string is written as
+	// JSON, as html/template's jsValEscaper writes it. A value trusted as
+	// JS is left to escapeAction.
 	if action.HTMLContext != nil && action.HTMLContext.State == "text" &&
 		action.HTMLContext.Element == "script" && action.HTMLContext.JSContext == "expr" &&
 		trust != TrustJS && trust != TrustJSStr {
@@ -1328,12 +1274,9 @@ func (s *state) walkHTMLAction(dot reflect.Value, action *ActionNode) ([]*html.N
 	}}, nil
 }
 
-// walkHTMLTagAction writes the value of an action in a tag the parser
-// left as text, which the engine writes as it is: the value is escaped
-// for where in the tag the action stands, scan, an attribute name or a
-// value. The scan follows the text as it is written, through control
-// structures and called templates, so it is where the action's output
-// lands whatever branch was taken.
+// walkHTMLTagAction writes the value of an action in a tag the parser left
+// as text, escaped for where scan says the action stands: an attribute
+// name or a value.
 func (s *state) walkHTMLTagAction(val reflect.Value, scan *tagScan) ([]*html.Node, error) {
 	text, trust, err := s.htmlActionText(val)
 	if err != nil {
@@ -1574,8 +1517,6 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 			return nil, err
 		}
 	}
-	// Execute the template into a buffer and parse the result as HTML? No —
-	// we walk the sub-template's tree and collect html.Nodes.
 	newState := &state{
 		tree:       tree,
 		cp:         s.cp,
@@ -1597,21 +1538,17 @@ func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.No
 	if root == nil {
 		return nil, nil
 	}
-	// Check if the sub-template is HTML (has an HTMLDocumentFragmentNode).
 	if len(root.Nodes) == 1 {
 		if frag, ok := root.Nodes[0].(*HTMLDocumentFragmentNode); ok {
 			return newState.walkHTMLNodes(newDot, frag.Children, false, false)
 		}
 	}
-	// Check if the root contains HTML nodes (e.g., from extracted
-	// {{define}}/{{block}} in HTML templates), or the tree was parsed in
-	// HTML mode. Both require the HTML walker so contextual escaping is
-	// applied to interpolated actions. tree.RootTrimFirst/RootTrimLast
-	// carry the defining node's own trim markers (see executeHTMLList).
+	// The tree of a define or block has no fragment, and still needs
+	// contextual escaping.
 	if tree.HTMLMode || rootHasHTMLNodes(root) {
 		return newState.walkHTMLList(newDot, root, tree.RootTrimFirst, tree.RootTrimLast)
 	}
-	// Plain text sub-template: render to string, return as text node.
+	// A text tree: its output is one text node.
 	var buf bytes.Buffer
 	newState.wr = &buf
 	if err := newState.walk(newDot, root); err != nil {
@@ -1630,10 +1567,9 @@ func (s *state) walkHTMLList(dot reflect.Value, list *ListNode, trimFirst, trimL
 	return s.walkHTMLNodes(dot, list.Nodes, trimFirst, trimLast)
 }
 
-// walkHTMLNodes walks sibling nodes, trimming a text node's spaces where
-// a neighbor's trim marker, or trimFirst and trimLast at the ends, says
-// to, as text/template does. On a break or continue it returns the nodes
-// built so far with the error.
+// walkHTMLNodes walks sibling nodes, trimming text where a neighbor's trim
+// marker, or trimFirst and trimLast at the ends, says to. On a break or
+// continue it returns the nodes built so far with the error.
 func (s *state) walkHTMLNodes(dot reflect.Value, nodes []Node, trimFirst, trimLast bool) ([]*html.Node, error) {
 	var result []*html.Node
 	for i, node := range nodes {
@@ -1649,9 +1585,8 @@ func (s *state) walkHTMLNodes(dot reflect.Value, nodes []Node, trimFirst, trimLa
 			if len(text) > 0 {
 				nodeType := html.TextNode
 				if tn.Verbatim || s.markup != nil {
-					// Rendered, the template's own text is written as
-					// it is, entities and all, as html/template writes
-					// it.
+					// The template's own text is written as it is,
+					// entities and all.
 					nodeType = html.RawNode
 				}
 				hn := &html.Node{
@@ -1678,7 +1613,8 @@ func (s *state) walkHTMLNodes(dot reflect.Value, nodes []Node, trimFirst, trimLa
 	return result, nil
 }
 
-// Attribute-position branch helpers for if/with inside element attributes.
+// walkHTMLAttrBranch executes an if or with written among an element's
+// attributes.
 func (s *state) walkHTMLAttrBranch(dot reflect.Value, branch *BranchNode, name string) ([]sourceAttr, error) {
 	branch.openCount.Add(1)
 	pipe, err := s.evalPipeline(dot, branch.Pipe)
@@ -1878,9 +1814,7 @@ func (s *state) walkHTMLAttrList(dot reflect.Value, list *ListNode) ([]sourceAtt
 	return result, nil
 }
 
-// htmlNodeText extracts the text content from an html.Node. For text nodes,
-// this returns Data directly. For element nodes, it recursively extracts text
-// from children, avoiding the bug where hn.Data would return the tag name.
+// htmlNodeText returns the text of n and its descendants.
 func htmlNodeText(n *html.Node) string {
 	if n.Type == html.TextNode || n.Type == html.RawNode {
 		return n.Data
@@ -1892,19 +1826,16 @@ func htmlNodeText(n *html.Node) string {
 	return buf.String()
 }
 
-// errTemplateInTag is the error for a {{template}} call in a tag, where
-// it would add attributes: the engine has parsed the called template as
-// HTML content, not as attributes, so it cannot execute it there.
+// errTemplateInTag is the error for a {{template}} call among a tag's
+// attributes: the called tree was parsed as content, not as attributes.
 func errTemplateInTag(s *state, n *TemplateNode) error {
 	return s.errorf("{{template %q}} in a tag is not supported by muxt's template engine", n.Name)
 }
 
-// rawAttrText is the text of an html.Node from an attribute value as
-// html/template writes it between quote: the template's own text, which
-// source holds, as it is, and all else, the output of actions and of
-// called templates, trusted or not, escaped for the quote. The node's
-// type says nothing about whether it can be trusted here: a trusted
-// value or a called template's text is a raw node too.
+// rawAttrText returns the text of a node from an attribute value as
+// html/template writes it between quote. The template's own text, which
+// source holds, is written as it is. All else is escaped whatever the
+// node's type: a trusted value is a raw node too.
 func rawAttrText(n *html.Node, quote byte, source map[*html.Node]bool) string {
 	if source[n] {
 		return n.Data
@@ -1920,9 +1851,8 @@ func rawAttrText(n *html.Node, quote byte, source map[*html.Node]bool) string {
 	return buf.String()
 }
 
-// validateAttrName checks that an attribute name contains only valid characters.
-// Per the HTML spec, attribute names must not contain spaces, quotes, >, /, =,
-// or control characters.
+// validateAttrName rejects a name that holds space, a quote, '>', '/', '='
+// or a control character.
 func validateAttrName(name string) error {
 	if name == "" {
 		return fmt.Errorf("empty attribute name")
@@ -1953,11 +1883,10 @@ func (s *state) writeError(err error) ExecError {
 
 var reflectValueType = reflect.TypeFor[reflect.Value]()
 
-// validateArg converts an argument value for a function call.
-// If the parameter type is reflect.Value, wrap the arg.
-// Otherwise, unwrap interfaces, and, as text/template does, dereference a
-// pointer whose element is assignable to the parameter, so a *T can be
-// passed to a func(T).
+// validateArg prepares arg for a parameter of paramType: wrapped for a
+// reflect.Value parameter, taken out of its interface otherwise. As
+// text/template does, a pointer whose element is assignable to the
+// parameter is dereferenced, so that a *T can be passed to a func(T).
 func (s *state) validateArg(paramType reflect.Type, arg reflect.Value) (reflect.Value, error) {
 	if paramType == reflectValueType {
 		return reflect.ValueOf(arg), nil

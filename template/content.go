@@ -1,10 +1,8 @@
 package template
 
-// The content types are this package's own, not aliases of
-// html/template's: laid over html/template in muxt's coverage pre-pass,
-// html/template aliases them, and this package must not import it.
-// trustOf also trusts html/template's, for code that runs this package in
-// process and passes the standard library's types.
+// The content types are this package's own: it can be built in place of
+// html/template, so it cannot import it. trustOf trusts html/template's
+// types as well.
 
 import "strconv"
 
@@ -95,6 +93,7 @@ type Error struct {
 	Description string
 }
 
+// Error formats e as html/template does.
 func (e *Error) Error() string {
 	switch {
 	case e.Node != nil:

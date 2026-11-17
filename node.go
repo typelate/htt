@@ -9,16 +9,13 @@ import (
 	"github.com/typelate/htt/lex"
 )
 
-// A Node is an element in the parse tree. The interface is trivial.
-// The interface contains an unexported method so that only
-// types local to this package can satisfy it.
+// A Node is an element of the parse tree. Only this package implements it.
 type Node interface {
 	String() string
 	Start() lex.Pos // byte position of start of node in full original input string
 	End() lex.Pos   // byte position of end of node (exclusive)
 
 	// tree returns the containing *Tree.
-	// It is unexported so all implementations of Node are in this package.
 	tree() *Tree
 
 	// writeTo writes the String output to the builder.
@@ -127,19 +124,11 @@ func (p *PipeNode) End() lex.Pos   { return p.end }
 func (p *PipeNode) String() string { return p.tr.src(p.start, p.End()) }
 func (p *PipeNode) tree() *Tree    { return p.tr }
 
-// HeadCommands returns p's commands as text/template evaluates them: when
-// the first command is a whole parenthesized pipeline that declares no
-// variables, with no arguments after it, that pipeline's commands take
-// its place, repeatedly. {{if (and .A .B)}} runs as {{if and .A .B}} and
-// {{template "x" (.)}} as {{template "x" .}}, since evaluating such a
-// command evaluates the inner pipeline and goes on with its value.
-//
-// Parentheses anywhere else are kept, because the evaluator treats them
-// differently: an argument, (.X) in {{print (.X)}}; a later stage,
-// {{.X | (print)}}; one followed by a field chain, {{(.X).Y}}; and one
-// that declares a variable, {{($y := .X)}}. p's declarations do not
-// matter. HeadCommands does not modify p; when it replaces nothing the
-// result is p.Commands itself.
+// HeadCommands returns the commands text/template evaluates for p. A first
+// command that is nothing but a parenthesized pipeline declaring no
+// variables gives way to that pipeline's commands, so {{if (and .A .B)}}
+// yields the commands of {{if and .A .B}}. Parentheses anywhere else stay.
+// The result may be p.Commands itself.
 func (p *PipeNode) HeadCommands() []*CommandNode {
 	cmds := p.Commands
 	for len(cmds) > 0 && len(cmds[0].Args) == 1 {
@@ -174,16 +163,15 @@ func (p *PipeNode) writeTo(sb *strings.Builder) {
 	}
 }
 
-// ActionNode holds an action (something bounded by delimiters).
-// Control actions have their own nodes; ActionNode represents simple
-// ones such as field evaluations and parenthesized pipelines.
+// ActionNode holds an action that is not a control structure, such as a
+// field evaluation.
 type ActionNode struct {
 	nodeParent
 	tr          *Tree
 	start, end  lex.Pos
 	Line        int          // The line number in the input. Deprecated: Kept for compatibility.
 	Pipe        *PipeNode    // The pipeline in the action.
-	HTMLContext *HTMLContext // Set by Template.Parse / AddParseTree; nil in non-HTML mode.
+	HTMLContext *HTMLContext // Set by AnnotateHTMLContexts; nil in non-HTML mode.
 	count       atomic.Int64
 	TrimLeft    bool // {{- was used
 	TrimRight   bool // -}} was used
@@ -340,9 +328,8 @@ func (f *FieldNode) writeTo(sb *strings.Builder) {
 	}
 }
 
-// ChainNode holds a term followed by a chain of field accesses (identifier starting with '.').
-// The names may be chained ('.x.y').
-// The periods are dropped from each ident.
+// ChainNode holds a term followed by field accesses, as in (.X).y.z.
+// The periods are dropped from Field.
 type ChainNode struct {
 	tr         *Tree
 	start, end lex.Pos
@@ -494,11 +481,8 @@ func (b *BranchNode) String() string {
 	return b.tr.src(b.Start(), b.End())
 }
 
-// ElseChain returns the branch the source chained onto b's else, as in
-// {{if .A}}a{{else if .B}}b{{end}}, or nil when b has no else or the
-// else is a plain {{else}} (even one holding only a nested branch).
-// The chained branch starts at the {{else if}} / {{else with}} action,
-// so its source opener is that action, and it holds the shared {{end}}.
+// ElseChain returns the branch of an {{else if}} or {{else with}} chained
+// onto b, or nil. A plain {{else}} that holds a nested branch is no chain.
 func (b *BranchNode) ElseChain() *BranchNode {
 	if !b.elseChained {
 		return nil
@@ -640,10 +624,8 @@ func (t *TemplateNode) writeTo(sb *strings.Builder) {
 	sb.WriteString("}}")
 }
 
-// DefineNode represents a {{define "name"}}...{{end}} kept inline in the AST.
-// In standard text/template parsing, defines are extracted into separate trees
-// during parsing. DefineNode allows the parser to retain the define in the
-// source-faithful AST; Extract() can later pull them out for execution.
+// DefineNode is a {{define}} kept where it was written. text/template moves
+// a define into its own tree while parsing; Extract does that afterward.
 type DefineNode struct {
 	nodeParent
 	tr         *Tree
@@ -677,10 +659,8 @@ func (d *DefineNode) writeTo(sb *strings.Builder) {
 	sb.WriteString("{{end}}")
 }
 
-// BlockNode represents a {{block "name" pipeline}}...{{end}} kept inline in
-// the AST. Like DefineNode it retains the body in the source tree; Extract()
-// pulls it out for execution. Unlike DefineNode it carries a Pipe (like
-// TemplateNode) that evaluates to dot for the block body.
+// BlockNode is a {{block}} kept where it was written. Pipe evaluates to dot
+// for the body.
 type BlockNode struct {
 	nodeParent
 	tr         *Tree
@@ -705,12 +685,8 @@ func (t *Tree) newBlock(start, end lex.Pos, line int, name string, pipe *PipeNod
 	}
 }
 
-// Call returns the {{template}} invocation text/template makes of a
-// block: a call of the template named Name, with Pipe as its dot, written
-// where the block is. The body is that template's default definition,
-// which a later define of the same name replaces, so a checker or walker
-// following the invocation reaches whichever definition the set kept.
-// It spans the whole block clause and is the same node on every call.
+// Call returns the {{template}} call a block stands for: the template named
+// Name with Pipe as dot. It spans the block and is the same node each time.
 func (b *BlockNode) Call() *TemplateNode { return b.call }
 
 func (b *BlockNode) Start() lex.Pos { return b.start }

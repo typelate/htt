@@ -9,6 +9,9 @@ import (
 	"github.com/typelate/htt/lex"
 )
 
+// Template is a set of named trees parsed together, and one tree in it.
+// Signature is the caller's representation of a function; the set only
+// records which names are registered.
 type Template[Signature any] struct {
 	templates             map[string]*Template[Signature] // shared across associated templates
 	name                  string
@@ -20,8 +23,7 @@ type Template[Signature any] struct {
 	skipFuncCheck         bool   // Parse does not check that called functions are defined
 }
 
-// New returns a template set that parses as html/template does: its
-// trees hold HTML structure and are executed in HTML mode.
+// New returns a set that parses in HTML mode, as html/template does.
 func New[Signature any](name string) *Template[Signature] {
 	t := &Template[Signature]{
 		name:      name,
@@ -31,34 +33,27 @@ func New[Signature any](name string) *Template[Signature] {
 	return t
 }
 
-// NewText returns a template set that parses as text/template does: its
-// trees are text and actions, with no HTML structure, so text such as
-// JSON or prose with a '<' in it parses as it does with text/template.
+// NewText returns a set that parses as text/template does, with no HTML
+// structure.
 func NewText[Signature any](name string) *Template[Signature] {
 	t := New[Signature](name)
 	t.text = true
 	return t
 }
 
-// SkipFuncCheck makes Parse accept a call of a function that is not
-// defined, as text/template/parse's SkipFuncCheck mode does, so that the
-// call reaches the type checker. It returns t.
+// SkipFuncCheck makes Parse accept calls of functions that are not
+// registered. It returns t.
 func (t *Template[S]) SkipFuncCheck() *Template[S] {
 	t.skipFuncCheck = true
 	return t
 }
 
-// IsText reports whether the set parses as text/template does (NewText).
+// IsText reports whether t came from NewText.
 func (t *Template[S]) IsText() bool {
 	return t.text
 }
 
-// ParseOptions are the lexer options Parse parses text with: the set's
-// delimiters, HTML structure unless the set is a text/template set,
-// break and continue as keywords unless the set registers functions of
-// those names, and, unless SkipFuncCheck was called, a call of a
-// function that is neither registered nor a builtin as a parse error, as
-// in text/template.
+// ParseOptions returns the lexer options Parse uses.
 func (t *Template[S]) ParseOptions() lex.Options {
 	_, hasBreak := t.functions["break"]
 	_, hasContinue := t.functions["continue"]
@@ -80,9 +75,7 @@ func (t *Template[S]) ParseOptions() lex.Options {
 	}
 }
 
-// Names returns the names of every template in the associated set,
-// sorted. Tooling (such as LSP completion) uses it to offer the targets
-// of {{template}} / {{block}} invocations.
+// Names returns the sorted names of the templates in the set.
 func (t *Template[S]) Names() []string {
 	names := make([]string, 0, len(t.templates))
 	for name := range t.templates {
@@ -92,14 +85,17 @@ func (t *Template[S]) Names() []string {
 	return names
 }
 
+// Name returns the template's name.
 func (t *Template[S]) Name() string {
 	return t.name
 }
 
+// Tree returns the template's tree, which is nil until it is parsed.
 func (t *Template[S]) Tree() *Tree {
 	return t.tree
 }
 
+// Functions registers functions by name. It returns t.
 func (t *Template[S]) Functions(functions map[string]S) *Template[S] {
 	if t.functions == nil {
 		t.functions = make(map[string]S)
@@ -110,6 +106,8 @@ func (t *Template[S]) Functions(functions map[string]S) *Template[S] {
 	return t
 }
 
+// Option sets options as text/template's Option does. The only option is
+// missingkey.
 func (t *Template[S]) Option(opt ...string) (*Template[S], error) {
 	for _, o := range opt {
 		switch {
@@ -117,8 +115,6 @@ func (t *Template[S]) Option(opt ...string) (*Template[S], error) {
 			value := o[len("missingkey="):]
 			switch value {
 			case "invalid", "default":
-				// stdlib html/template treats "default" as an alias for
-				// "invalid" (both select mapInvalid), so store the canonical form.
 				t.missingKey = "invalid"
 			case "zero", "error":
 				t.missingKey = value
@@ -132,16 +128,20 @@ func (t *Template[S]) Option(opt ...string) (*Template[S], error) {
 	return t, nil
 }
 
+// Delimiters sets the action delimiters for later calls to Parse. It
+// returns t.
 func (t *Template[S]) Delimiters(left, right string) *Template[S] {
 	t.leftDelim = left
 	t.rightDelim = right
 	return t
 }
 
+// Lookup returns the template named name, or nil.
 func (t *Template[S]) Lookup(name string) *Template[S] {
 	return t.templates[name]
 }
 
+// FindTree implements TreeFinder.
 func (t *Template[S]) FindTree(name string) (*Tree, bool) {
 	if tmpl := t.templates[name]; tmpl != nil && tmpl.tree != nil {
 		return tmpl.tree, true
@@ -149,6 +149,8 @@ func (t *Template[S]) FindTree(name string) (*Tree, bool) {
 	return nil, false
 }
 
+// Parse parses text as the body of t and adds the templates it defines to
+// the set.
 func (t *Template[S]) Parse(text string) (*Template[S], error) {
 	options := t.ParseOptions()
 	treeSet := make(map[string]*Tree)
@@ -156,9 +158,8 @@ func (t *Template[S]) Parse(text string) (*Template[S], error) {
 	if err != nil {
 		return nil, err
 	}
-	// text/template records the name as given, with no file behind it;
-	// ParseTree takes it for a file path. The trees the parser registered
-	// copied the root's names, and Extract copies them from the root.
+	// ParseTree took the name for a file path; text/template records it
+	// as given, with no file behind it.
 	tree.ParseName, tree.Filepath = t.name, ""
 	for _, tr := range treeSet {
 		tr.ParseName, tr.Filepath = t.name, ""
@@ -171,6 +172,8 @@ func (t *Template[S]) Parse(text string) (*Template[S], error) {
 	return t, nil
 }
 
+// AddParseTree adds tree to the set under name and returns its template.
+// An empty tree does not replace one already there.
 func (t *Template[S]) AddParseTree(name string, tree *Tree) (*Template[S], error) {
 	if !t.text {
 		tree.HTMLMode = true
@@ -185,8 +188,6 @@ func (t *Template[S]) AddParseTree(name string, tree *Tree) (*Template[S], error
 		}
 		t.templates[name] = tmpl
 	}
-	// As text/template does, an empty tree does not replace one the
-	// template already has.
 	if tmpl.tree == nil || !IsEmptyTree(tree.Root) {
 		tmpl.tree = tree
 	}

@@ -8,22 +8,19 @@ import (
 	"path/filepath"
 )
 
-// ParseFiles creates a new Template and parses the template definitions from
-// the named files. The returned template's name will have the base name and
-// parsed contents of the first file. There must be at least one file.
+// ParseFiles parses the named files into a new set and returns the
+// template of the first, named for its base name. There must be a file.
 func ParseFiles(filenames ...string) (*Template, error) {
 	return parseFiles(nil, readFileOS, filenames...)
 }
 
-// ParseGlob creates a new Template and parses the template definitions from
-// the files identified by the pattern. The pattern is processed by
-// filepath.Glob and must match at least one file.
+// ParseGlob is ParseFiles for the files that match pattern, as
+// filepath.Glob reads it. It must match a file.
 func ParseGlob(pattern string) (*Template, error) {
 	return parseGlob(nil, pattern)
 }
 
-// ParseFS is like ParseFiles or ParseGlob but reads from the file system fsys
-// instead of the host operating system's file system.
+// ParseFS is ParseFiles for the files in fsys that match patterns.
 func ParseFS(fsys fs.FS, patterns ...string) (*Template, error) {
 	return parseFS(nil, fsys, patterns...)
 }

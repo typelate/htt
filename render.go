@@ -70,14 +70,10 @@ func (m *markup) leaveOpen(n *html.Node) {
 	m.open[n] = true
 }
 
-// render writes the HTML representation of the node tree to w.
-// It matches html/template's output format:
-//   - Void elements use <br> not <br/>
-//   - Attributes with empty values are rendered bare (e.g., disabled not disabled="")
-//   - Text content and attribute values are properly escaped
-//   - An attribute m has the syntax of is written as the source writes
-//     it, quotes and static text included
-//   - An element m says the source leaves open has no end tag
+// render writes n as html/template would write the template: void
+// elements with no slash, empty attribute values bare, an attribute m has
+// the syntax of as its source writes it, and no end tag for an element m
+// says the source leaves open.
 func render(w io.Writer, n *html.Node, m *markup) error {
 	return renderer{m}.node(w, n)
 }
@@ -277,8 +273,7 @@ func escapeAttrText(s string, quote byte) string {
 	return unquotedAttrEscaper.Replace(s)
 }
 
-// htmlEscaper escapes the five HTML special characters plus \r,
-// matching x/net/html's escape function used by html.Render.
+// renderTextEscaper escapes text as x/net/html's Render does.
 var renderTextEscaper = strings.NewReplacer(
 	`&`, "&amp;",
 	`'`, "&#39;",
@@ -288,16 +283,12 @@ var renderTextEscaper = strings.NewReplacer(
 	"\r", "&#13;",
 )
 
-// htmlEscapeString escapes special HTML characters in text content.
 func htmlEscapeString(s string) string {
 	return renderTextEscaper.Replace(s)
 }
 
-// attrEscaper escapes HTML special characters in attribute values,
-// including newlines which must be escaped in attribute contexts.
-// Single quotes are NOT escaped because we always use double-quoted
-// attributes, and this matches html/template's output for static
-// attribute content.
+// attrEscaper escapes a value written between double quotes, so a single
+// quote stays as it is.
 var attrEscaper = strings.NewReplacer(
 	`&`, "&amp;",
 	`<`, "&lt;",
@@ -307,13 +298,10 @@ var attrEscaper = strings.NewReplacer(
 	"\r", "&#13;",
 )
 
-// htmlEscapeAttrVal escapes special characters in attribute values.
 func htmlEscapeAttrVal(s string) string {
 	return attrEscaper.Replace(s)
 }
 
-// isVoidElement reports whether the named element is a void element
-// (one that cannot have child nodes).
 func isVoidElement(tag string) bool {
 	switch tag {
 	case "area", "base", "br", "col", "embed", "hr", "img", "input",
@@ -323,28 +311,22 @@ func isVoidElement(tag string) bool {
 	return false
 }
 
-// IsVoidElement reports whether the named element is a void element
-// (no closing tag). Exported for tooling such as the LSP.
+// IsVoidElement reports whether the named element is void: it has no
+// content and no end tag.
 func IsVoidElement(tag string) bool {
 	return isVoidElement(tag)
 }
 
-// IsRawTextElement reports whether the named element holds raw text
-// whose contents are not HTML-escaped. Exported for tooling such as
-// the LSP.
+// IsRawTextElement reports whether the named element is script or style,
+// whose text is written unescaped.
 func IsRawTextElement(tag string) bool {
 	return isRawTextElement(tag)
 }
 
 // changesTextContext reports whether a browser reads what follows the
-// named element's start tag, until its end tag, as other than HTML text:
-// raw text (script, style, xmp, iframe, noembed, noframes, noscript,
-// plaintext) or escapable raw text (textarea, title). The engine always
-// writes such an element's end tag, even where the source leaves it out:
-// output escaped as HTML text after it, in later siblings or in a
-// template called next, would otherwise be read in the element's context,
-// as script in <script>. html/template refuses a template that ends in
-// script, style, textarea or title, and reads the others as HTML text.
+// named element's start tag as something other than HTML text. Such an
+// element always gets its end tag, even where the source leaves it out,
+// so that output escaped as HTML text does not land in script.
 func changesTextContext(tag string) bool {
 	switch strings.ToLower(tag) {
 	case "script", "style", "textarea", "title",
@@ -354,10 +336,8 @@ func changesTextContext(tag string) bool {
 	return false
 }
 
-// isRawTextElement reports whether the named element holds raw text content
-// (no HTML entity expansion). Children of these elements must be emitted
-// verbatim — HTML-escaping their text would corrupt the script or style
-// payload, since the browser does not entity-decode raw-text elements.
+// isRawTextElement reports whether tag is script or style. A browser
+// decodes no entities there, so their text is written as it is.
 func isRawTextElement(tag string) bool {
 	switch tag {
 	case "script", "style":

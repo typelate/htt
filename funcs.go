@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// builtins returns the default set of built-in functions.
+// builtins returns the functions every template may call.
 func builtins() FuncMap {
 	return FuncMap{
 		"and":      and,
@@ -33,14 +33,12 @@ func builtins() FuncMap {
 	}
 }
 
-// IsTrue reports whether the value is 'true', in the sense of not the zero of its type,
-// and whether the value is valid. It is for use by packages that wrap htt.
+// IsTrue reports whether val is true as {{if}} sees it, meaning not the
+// zero of its type, and whether val has a meaningful truth value.
 func IsTrue(val any) (truth, ok bool) {
 	return isTrue(reflect.ValueOf(val))
 }
 
-// isTrue reports whether the value is 'true', in the sense of not the zero of its type,
-// and whether the value is valid.
 func isTrue(val reflect.Value) (truth, ok bool) {
 	if !val.IsValid() {
 		return false, true
@@ -68,11 +66,8 @@ func isTrue(val reflect.Value) (truth, ok bool) {
 	return truth, true
 }
 
-// and and or are retained for the builtins()/FuncMap surface (name presence
-// and signature), but are not invoked at runtime: the executor intercepts the
-// built-in and/or in evalFunction and evaluates them lazily via evalAndOr, so
-// argument evaluation short-circuits. These functions still encode the
-// value-selection semantics that evalAndOr mirrors.
+// and and or give the builtins their names and signatures. Execution does
+// not call them: evalAndOr evaluates the builtins lazily.
 func and(arg0 reflect.Value, args ...reflect.Value) reflect.Value {
 	if !truth(arg0) {
 		return arg0
@@ -173,7 +168,7 @@ func safeCall(fun reflect.Value, args []reflect.Value) (val reflect.Value, err e
 	return ret[0], nil
 }
 
-// index returns the result of indexing its first argument by the following arguments.
+// index returns item indexed by each of indexes in turn.
 func index(item reflect.Value, indexes ...reflect.Value) (reflect.Value, error) {
 	item = indirectInterface(item)
 	if !item.IsValid() {
@@ -473,7 +468,7 @@ func shouldEscape(c byte) bool {
 	return true
 }
 
-// prepareArg checks and converts an argument value to the required type.
+// prepareArg converts value to typ where it can.
 func prepareArg(value reflect.Value, typ reflect.Type) reflect.Value {
 	if !value.IsValid() {
 		if canBeNil(typ) {
@@ -538,7 +533,8 @@ func goodFunc(typ reflect.Type) bool {
 
 var errorType = reflect.TypeFor[error]()
 
-// indirect returns the value dereferencing through any pointer and reports whether the value is nil.
+// indirect dereferences v through its pointers and reports whether it met
+// a nil one.
 func indirect(v reflect.Value) (rv reflect.Value, isNil bool) {
 	for ; v.Kind() == reflect.Pointer; v = v.Elem() {
 		if v.IsNil() {

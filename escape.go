@@ -8,48 +8,36 @@ import (
 	"unicode/utf8"
 )
 
-// Trust classifies values that should bypass contextual escaping in
-// HTML-mode execution. The set mirrors the safe-content types from
-// the standard html/template package.
+// Trust says which contextual escaping a value skips in HTML mode. The
+// kinds match html/template's safe-content types.
 type Trust int
 
 const (
-	// TrustNone means the value gets default contextual escaping.
+	// TrustNone escapes the value for its context.
 	TrustNone Trust = iota
-	// TrustHTML marks a value as a known-safe HTML fragment. In body
-	// context (text, not script/style), the value is rendered raw.
+	// TrustHTML is an HTML fragment, written as it is in element content.
 	TrustHTML
-	// TrustURL marks a value as a known-safe URL. In URL attributes,
-	// the safe-scheme filter is skipped.
+	// TrustURL is a URL, not filtered by scheme.
 	TrustURL
-	// TrustJS marks a value as a known-safe JavaScript expression. In
-	// script body context, JS-string escaping is skipped.
+	// TrustJS is a JavaScript expression.
 	TrustJS
-	// TrustJSStr marks a value as known-safe content for inside a
-	// quoted JavaScript string literal. JS-string escaping is skipped
-	// in script string context.
+	// TrustJSStr is text for the inside of a JavaScript string literal.
 	TrustJSStr
-	// TrustCSS marks a value as known-safe CSS. In style body context,
-	// CSS escaping is skipped.
+	// TrustCSS is CSS, written as it is in a style element.
 	TrustCSS
-	// TrustHTMLAttr marks a value as a known-safe HTML attribute value.
-	// URL filtering and JS-event escaping are skipped.
+	// TrustHTMLAttr is an attribute value that skips every attribute
+	// filter, or a name where an attribute is written.
 	TrustHTMLAttr
-	// TrustSrcset marks a value as a known-safe srcset attribute value.
-	// Per-URL safe-scheme filtering is skipped.
+	// TrustSrcset is a srcset value, not filtered by scheme.
 	TrustSrcset
 )
 
-// TrustFunc inspects a runtime value and reports its trust classification.
-// A nil TrustFunc behaves like one that returns TrustNone.
+// TrustFunc reports the Trust of a value. A nil TrustFunc trusts nothing.
 type TrustFunc func(reflect.Value) Trust
 
-// escapeAction applies context-appropriate escaping to a string based on the
-// HTMLContext annotation on the ActionNode and the optional Trust kind.
-//
-// It returns the escaped text and a "raw" flag. When raw is true, the result
-// must be emitted as html.RawNode so the renderer does not HTML-escape it
-// again — used for trusted HTML/JS/CSS in body or script/style position.
+// escapeAction escapes s for the context ctx with the given trust. It
+// reports whether the result is already escaped and must be written as it
+// is.
 func escapeAction(s string, ctx *HTMLContext, trust Trust) (string, bool) {
 	if ctx == nil {
 		return s, false
@@ -78,19 +66,17 @@ func escapeAction(s string, ctx *HTMLContext, trust Trust) (string, bool) {
 	}
 }
 
-// escapeScript escapes a value interpolated into <script> content.
-// The HTMLContext.JSContext field tells us whether the action sits inside
-// a JS string/template literal (apply jsStrEscape) or a bare expression
-// (apply jsValEscape, which JSON-quotes the value).
+// escapeScript escapes a value in script content: as the content of a
+// string or template literal the action is in, and as a quoted string
+// where it is in an expression.
 func escapeScript(s string, ctx *HTMLContext, trust Trust) string {
 	if trust == TrustJS {
 		return s
 	}
 	switch ctx.JSContext {
 	case "tpl":
-		// A template literal is a string, but `${` opens an expression.
-		// TrustJSStr is not honored here: it asserts the value is safe
-		// between quotes, which says nothing about interpolation.
+		// TrustJSStr vouches for a value between quotes, not for one
+		// that could open a ${...}.
 		return escapeJSTmplLit(s)
 	case "str":
 		if trust == TrustJSStr {
@@ -98,9 +84,7 @@ func escapeScript(s string, ctx *HTMLContext, trust Trust) string {
 		}
 		return escapeJS(s)
 	default:
-		// Expression context: wrap in quotes and JS-escape so the
-		// interpolated value is always a JS string literal. This
-		// prevents JS injection from non-string template data.
+		// In an expression the value is always a string literal.
 		if trust == TrustJSStr {
 			return "\"" + s + "\""
 		}
@@ -108,13 +92,8 @@ func escapeScript(s string, ctx *HTMLContext, trust Trust) string {
 	}
 }
 
-// escapeAttrValue applies pre-rendering sanitization for HTML attribute values.
-// TrustHTMLAttr passes through verbatim (still HTML-attr-escaped by the
-// renderer). The other trust kinds are scoped to specific attribute
-// classes — TrustURL bypasses URL filtering, TrustSrcset bypasses srcset
-// filtering, TrustJS/TrustJSStr bypass JS-event JS escape but the value is
-// still wrapped so it forms a single quoted JS string in the resulting
-// inline handler.
+// escapeAttrValue filters s for the attribute ctx names. Each trust kind
+// covers its own class of attribute; TrustHTMLAttr covers all of them.
 func escapeAttrValue(s string, ctx *HTMLContext, trust Trust) string {
 	if trust == TrustHTMLAttr {
 		return s
@@ -140,46 +119,34 @@ func escapeAttrValue(s string, ctx *HTMLContext, trust Trust) string {
 	}
 }
 
-// escapeCSSText escapes a value interpolated into <style> content using a
-// CSS-aware replacement table so values cannot break out of declarations,
-// rules, comments, or strings.
+// escapeCSSText escapes s for style content, so that it cannot leave a
+// declaration, rule, comment or string.
 func escapeCSSText(s string) string {
 	return jsReplace(s, cssReplacementTable)
 }
 
-// escapeJS applies JS string escaping using the same replacement table approach
-// as html/template's jsStrEscaper.
+// escapeJS escapes s for a JavaScript string, as html/template's
+// jsStrEscaper does.
 func escapeJS(s string) string {
 	return jsReplace(s, jsStrReplacementTable)
 }
 
-// escapeJSTmplLit applies JS escaping for content interpolated into a
-// backtick template literal. It matches html/template's jsTmplLitEscaper.
+// escapeJSTmplLit escapes s for a backtick template literal, as
+// html/template's jsTmplLitEscaper does.
 func escapeJSTmplLit(s string) string {
 	return jsReplace(s, jsTmplLitReplacementTable)
 }
 
-// jsValEscape matches html/template's jsValEscaper for string values:
-// the content is JS-escaped and wrapped in double quotes.
+// jsValEscape returns s as a double-quoted JavaScript string.
 func jsValEscape(s string) string {
 	return "\"" + escapeJS(s) + "\""
 }
 
-// jsExprJSONMarshal renders v (a non-string action result landing directly
-// in a <script> expression position, e.g. {{.Result}} where Result is a
-// struct or slice) as a JSON literal, matching html/template's
-// jsValEscaper: any value there is json.Marshal-ed, not just quoted as a
-// string, so a struct produces a JS object literal instead of Go's %v
-// syntax wrapped in quotes.
-//
-// encoding/json's Marshal already HTML-escapes '<', '>', and '&' to
-// </>/& by default, which is what keeps a marshaled
-// "</script>" from being able to close the surrounding script element —
-// the same property html/template's jsValEscaper relies on. Reports false
-// (falling back to the caller's normal string path) when v is nil or
-// itself a string/[]byte: those already render correctly through the
-// existing jsValEscape path, and routing them here as well is unnecessary
-// surface for no behavior change.
+// jsExprJSONMarshal returns v as JSON for a script expression, as
+// html/template's jsValEscaper does, so that a struct becomes an object
+// literal. json.Marshal escapes '<', '>' and '&', so the result cannot
+// close the script element. It reports false for nil and strings, which
+// jsValEscape handles, and for values JSON cannot hold.
 func jsExprJSONMarshal(v any) (string, bool) {
 	if v == nil {
 		return "", false
@@ -237,8 +204,8 @@ func jsReplace(s string, replacementTable []string) string {
 	return b.String()
 }
 
-// lowUnicodeReplacementTable contains replacements for all control characters
-// (U+0000 through U+001F). Matches html/template's lowUnicodeReplacementTable.
+// lowUnicodeReplacementTable replaces the control characters U+0000 through
+// U+001F, as html/template's table of the same name does.
 var lowUnicodeReplacementTable = []string{
 	0:    "\\u0000",
 	0x01: "\\u0001",
@@ -274,8 +241,7 @@ var lowUnicodeReplacementTable = []string{
 	0x1f: "\\u001f",
 }
 
-// jsStrReplacementTable contains replacements for JS string special characters.
-// Matches html/template's jsStrReplacementTable.
+// jsStrReplacementTable is html/template's table of the same name.
 var jsStrReplacementTable = []string{
 	0:    "\\u0000",
 	'\t': "\\t",
@@ -296,10 +262,9 @@ var jsStrReplacementTable = []string{
 	'\\': "\\\\",
 }
 
-// jsTmplLitReplacementTable is jsStrReplacementTable extended with the
-// characters that are special inside a backtick template literal: `$` and
-// `{` (which together open an interpolation) and `}` (which closes one).
-// Matches html/template's jsBqStrReplacementTable.
+// jsTmplLitReplacementTable is jsStrReplacementTable with '$', '{' and
+// '}', which open and close an interpolation in a template literal. It is
+// html/template's jsBqStrReplacementTable.
 var jsTmplLitReplacementTable = []string{
 	0:    "\\u0000",
 	'\t': "\\t",
@@ -323,11 +288,9 @@ var jsTmplLitReplacementTable = []string{
 	'}':  "\\u007d",
 }
 
-// cssReplacementTable contains replacements for characters that are special
-// in CSS. Anything that could let an interpolated value break out of a CSS
-// declaration, rule, comment, or string is hex-escaped. CSS hex escapes
-// terminate at the first non-hex character so each replacement is followed
-// by a space.
+// cssReplacementTable hex-escapes the characters that are special in CSS.
+// A hex escape runs to the first character that is not a hex digit, so
+// each ends with a space.
 var cssReplacementTable = []string{
 	0:    "\\0 ",
 	'\t': "\\9 ",
@@ -356,8 +319,8 @@ var cssReplacementTable = []string{
 	'&':  "\\26 ",
 }
 
-// filterURL checks a URL for safe schemes. If the URL has a dangerous scheme
-// (like javascript:), it is replaced with "#ZgotmplZ" (matching html/template).
+// filterURL returns s, or "#ZgotmplZ" when s has a scheme that is not
+// safe, as html/template does.
 func filterURL(s string) string {
 	s = strings.TrimSpace(s)
 	if isSafeURL(s) {
@@ -366,9 +329,8 @@ func filterURL(s string) string {
 	return "#ZgotmplZ"
 }
 
-// filterSrcset filters a srcset attribute value. Each comma-separated entry is
-// of the form "url" or "url descriptor"; the URL portion is passed through
-// filterURL and unsafe entries are replaced with "#ZgotmplZ".
+// filterSrcset applies filterURL to the URL of each comma-separated entry
+// of a srcset value.
 func filterSrcset(s string) string {
 	parts := strings.Split(s, ",")
 	for i, p := range parts {
@@ -387,8 +349,8 @@ func filterSrcset(s string) string {
 	return strings.Join(parts, ", ")
 }
 
-// isSafeURL reports whether s is a relative URL or has a safe protocol scheme.
-// Only http, https, and mailto are considered safe, matching html/template.
+// isSafeURL reports whether s is relative or has the scheme http, https or
+// mailto, the ones html/template allows.
 func isSafeURL(s string) bool {
 	if protocol, _, ok := strings.Cut(s, ":"); ok && !strings.Contains(protocol, "/") {
 		if !strings.EqualFold(protocol, "http") && !strings.EqualFold(protocol, "https") && !strings.EqualFold(protocol, "mailto") {
@@ -398,7 +360,7 @@ func isSafeURL(s string) bool {
 	return true
 }
 
-// isURLAttr reports whether an attribute typically contains a URL.
+// isURLAttr reports whether attr holds a URL.
 func isURLAttr(attr string) bool {
 	switch strings.ToLower(attr) {
 	case "href", "src", "action", "formaction", "cite", "data", "poster",
@@ -409,8 +371,7 @@ func isURLAttr(attr string) bool {
 	return false
 }
 
-// isSrcsetAttr reports whether an attribute is a srcset attribute that
-// contains a comma-separated list of URLs.
+// isSrcsetAttr reports whether attr holds a comma-separated list of URLs.
 func isSrcsetAttr(attr string) bool {
 	switch strings.ToLower(attr) {
 	case "srcset", "imagesrcset":
@@ -419,10 +380,8 @@ func isSrcsetAttr(attr string) bool {
 	return false
 }
 
-// isJSEventAttr reports whether an attribute is a JavaScript event handler.
-// The set is the union of html/template's attrTypeMap event handlers and
-// common modern events. Attributes that merely start with "on" but are not
-// real event handlers (such as "only") are not treated as JS context.
+// isJSEventAttr reports whether attr is an event handler listed in
+// js_event_attrs.json. A name that only starts with "on" is not one.
 func isJSEventAttr(attr string) bool {
 	_, ok := jsEventAttrs[strings.ToLower(attr)]
 	return ok
@@ -431,8 +390,6 @@ func isJSEventAttr(attr string) bool {
 //go:embed js_event_attrs.json
 var jsEventAttrsJSON []byte
 
-// jsEventAttrs is loaded from js_event_attrs.json so the canonical list
-// can be edited without touching Go source.
 var jsEventAttrs = loadJSEventAttrs()
 
 func loadJSEventAttrs() map[string]struct{} {
@@ -447,37 +404,35 @@ func loadJSEventAttrs() map[string]struct{} {
 	return out
 }
 
-// EscapeJS is the exported form of escapeJS for testing.
+// EscapeJS escapes s for the inside of a JavaScript string literal.
 func EscapeJS(s string) string {
 	return escapeJS(s)
 }
 
-// EscapeCSS is the exported form of escapeCSSText for testing.
+// EscapeCSS escapes s for style content.
 func EscapeCSS(s string) string {
 	return escapeCSSText(s)
 }
 
-// FilterURL is the exported form of filterURL for testing.
+// FilterURL returns s, or "#ZgotmplZ" when s has a scheme other than
+// http, https or mailto.
 func FilterURL(s string) string {
 	return filterURL(s)
 }
 
-// IsURLAttr reports whether the named attribute typically holds a URL,
-// meaning an interpolated value is filtered for dangerous schemes. It
-// is the exported form of the classifier the escaper uses, so tooling
-// (such as the LSP) can describe escaping without drifting from it.
+// IsURLAttr reports whether the escaper filters values of the named
+// attribute as URLs.
 func IsURLAttr(attr string) bool {
 	return isURLAttr(attr)
 }
 
-// IsJSEventAttr reports whether the named attribute is a JavaScript
-// event handler, meaning an interpolated value is JS-escaped. It is
-// the exported form of the classifier the escaper uses.
+// IsJSEventAttr reports whether the escaper escapes values of the named
+// attribute as JavaScript.
 func IsJSEventAttr(attr string) bool {
 	return isJSEventAttr(attr)
 }
 
-// FilterSrcset is the exported form of filterSrcset for testing.
+// FilterSrcset applies FilterURL to each URL of a srcset value.
 func FilterSrcset(s string) string {
 	return filterSrcset(s)
 }

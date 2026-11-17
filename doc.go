@@ -1,20 +1,16 @@
-// Package template is muxt's template engine: a text/template parser that
-// records source positions and parses HTML structure, and the execution
-// engine for its trees. Package template/html builds an
-// html/template-compatible API on it.
+// Package htt parses Go templates into trees that keep source positions and
+// HTML structure, and executes those trees.
 //
-// It is muxt's analysis and coverage engine, and its contextual escaping
-// has documented gaps (see ExecuteTemplate); muxt's generated handlers
-// render with the standard library's html/template, and this package must
-// not be used to render untrusted data for a browser.
+// The parser accepts the templates text/template and html/template accept.
+// In HTML mode, elements, attributes and comments are nodes beside the
+// actions, and each {{define}} and {{block}} stays where it was written.
+// Package template puts html/template's API over the same engine.
 //
-// The packages are public so that the coverage pre-pass of muxt
-// test-template-mutations can require them from the module under test, and
-// so that tools can use them. They are versioned with the muxt command:
-// go get github.com/typelate/htt@<version> gets the engine of
-// muxt <version>. There is no stability promise beyond the command's own;
-// any release may change their API.
+// Execution serves analysis, tests and coverage. Its contextual escaping
+// is weaker than html/template's (see [ExecuteTemplate]), so its output
+// must not be served to a browser.
 //
-// Derived in part from the Go standard library; see NOTICE.txt at the
-// repository root.
+// The API carries no compatibility promise.
+//
+// Parts of this module derive from the Go standard library; see NOTICE.txt.
 package htt

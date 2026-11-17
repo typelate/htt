@@ -4,8 +4,7 @@ import (
 	"strings"
 )
 
-// HTML item types for the lexer when operating in HTML mode.
-// These extend the TokenType constants defined in lex.go.
+// The token types of HTML mode.
 const (
 	TokenTypeHTMLText         TokenType = iota + 100 // text outside HTML tags and template actions
 	TokenTypeHTMLStartTag                            // start tag name, e.g. "div" from "<div"
@@ -28,8 +27,8 @@ var rawTextElements = map[string]bool{
 	"script": true, "style": true, "textarea": true, "title": true,
 }
 
-// lexHTMLTag dispatches '<' to the appropriate tag lexer (start tag, end tag,
-// comment, or doctype). The '<' has not been consumed.
+// lexHTMLTag lexes the '<' at the current position and picks the state for
+// what it opens: a start tag, an end tag, a comment or a doctype.
 func lexHTMLTag(l *Scanner) stateFn {
 	l.next() // consume '<'
 	rest := l.input[l.pos:]
@@ -54,8 +53,8 @@ func lexHTMLTag(l *Scanner) stateFn {
 	return l.emit(TokenTypeHTMLTagOpen)
 }
 
-// lexHTMLDoctype scans a <!DOCTYPE ...> or similar construct.
-// The '<' has already been consumed. Current position is at '!' or '?'.
+// lexHTMLDoctype scans a doctype or processing instruction through its
+// '>', from the '!' or '?' after the '<'.
 func lexHTMLDoctype(l *Scanner) stateFn {
 	// Scan until '>'
 	for {
@@ -70,7 +69,7 @@ func lexHTMLDoctype(l *Scanner) stateFn {
 	}
 }
 
-// lexHTMLStartTagName scans the tag name after '<' has been emitted as itemHTMLTagOpen.
+// lexHTMLStartTagName scans the tag name after '<'.
 func lexHTMLStartTagName(l *Scanner) stateFn {
 	if !scanHTMLTagName(l) {
 		return l.errorf("expected tag name")
@@ -83,7 +82,7 @@ func lexHTMLStartTagName(l *Scanner) stateFn {
 	return l.emit(TokenTypeHTMLStartTag)
 }
 
-// lexHTMLEndTagName scans the tag name after '</' has been emitted as itemHTMLEndTagOpen.
+// lexHTMLEndTagName scans the tag name after "</".
 func lexHTMLEndTagName(l *Scanner) stateFn {
 	if !scanHTMLTagName(l) {
 		return l.errorf("expected tag name after </")
@@ -111,8 +110,8 @@ func lexHTMLEndTagClose(l *Scanner) stateFn {
 	return l.emit(TokenTypeHTMLTagEnd)
 }
 
-// scanHTMLTagName consumes an HTML tag name (ASCII alpha followed by alphanumerics and hyphens).
-// Returns false if no valid tag name was found.
+// scanHTMLTagName consumes a tag name: an ASCII letter, then letters,
+// digits and hyphens. It reports whether it found one.
 func scanHTMLTagName(l *Scanner) bool {
 	r := l.next()
 	if r == eof || !isASCIIAlpha(r) {
@@ -133,8 +132,8 @@ func scanHTMLTagName(l *Scanner) bool {
 	return l.pos > l.start
 }
 
-// lexHTMLAfterTagName scans the content after a tag name: attributes, '>', or '/>'.
-// Also handles template actions ({{...}}) inside attribute positions.
+// lexHTMLAfterTagName scans what follows a tag name or an attribute: an
+// attribute, an action, '>' or "/>".
 func lexHTMLAfterTagName(l *Scanner) stateFn {
 	// Skip whitespace first.
 	for isSpace(l.peek()) {
@@ -200,8 +199,8 @@ func lexHTMLAttrName(l *Scanner) stateFn {
 	return l.errorf("expected attribute name")
 }
 
-// lexHTMLAfterAttrName handles what comes after an attribute name:
-// '=' (followed by value), whitespace + next attr, or tag close.
+// lexHTMLAfterAttrName scans the '=' after an attribute name, if there is
+// one.
 func lexHTMLAfterAttrName(l *Scanner) stateFn {
 	// Skip whitespace.
 	for isSpace(l.peek()) {
@@ -220,8 +219,7 @@ func lexHTMLAfterAttrName(l *Scanner) stateFn {
 	return lexHTMLAfterTagName
 }
 
-// lexHTMLAfterAttrEquals handles what comes after '=':
-// quoted or unquoted attribute value, possibly containing template actions.
+// lexHTMLAfterAttrEquals picks the state for the value after '='.
 func lexHTMLAfterAttrEquals(l *Scanner) stateFn {
 	// Skip whitespace after '='.
 	for isSpace(l.peek()) {
@@ -241,15 +239,15 @@ func lexHTMLAfterAttrEquals(l *Scanner) stateFn {
 	}
 }
 
-// lexHTMLAttrValueDoubleQuoted scans a double-quoted attribute value.
-// The opening '"' has not been consumed.
+// lexHTMLAttrValueDoubleQuoted scans a double-quoted attribute value from
+// its opening quote.
 func lexHTMLAttrValueDoubleQuoted(l *Scanner) stateFn {
 	l.next() // consume opening '"'
 	return lexHTMLAttrValueDoubleQuotedInner(l)
 }
 
-// lexHTMLAttrValueDoubleQuotedInner scans inside a double-quoted value.
-// Called after the opening quote is consumed, or after resuming from a template action.
+// lexHTMLAttrValueDoubleQuotedInner scans a double-quoted value after its
+// opening quote, or after an action in it.
 func lexHTMLAttrValueDoubleQuotedInner(l *Scanner) stateFn {
 	for {
 		rest := l.input[l.pos:]
@@ -316,8 +314,8 @@ func lexHTMLAttrValueUnquoted(l *Scanner) stateFn {
 	return lexHTMLAttrValueUnquotedImpl(l, false)
 }
 
-// lexHTMLAttrValueUnquotedContinue resumes unquoted value scanning after a
-// template action has already been emitted as part of the value.
+// lexHTMLAttrValueUnquotedContinue scans an unquoted value after an action
+// in it.
 func lexHTMLAttrValueUnquotedContinue(l *Scanner) stateFn {
 	return lexHTMLAttrValueUnquotedImpl(l, true)
 }
@@ -351,19 +349,10 @@ func lexHTMLAttrValueUnquotedImpl(l *Scanner, hasContent bool) stateFn {
 	return l.errorf("expected attribute value")
 }
 
-// lexHTMLCommentBody scans HTML comment content after '<!--' has been emitted.
-// Scans until '-->' is found. Template actions inside comments are recognized.
-//
-// Per HTML5 WHATWG 13.2.5.43-44, comments may be "abruptly closed":
-//   - '<!-->' closes immediately (empty comment, '>' is the close token)
-//   - '<!--->' closes immediately (empty comment, '->' is the close token)
-//
-// These are parse errors per the spec but produce valid empty comments.
-// html/template (via golang.org/x/net/html) handles them at runtime, so
-// tooling must accept them to avoid false positives on valid templates.
+// lexHTMLCommentBody scans a comment's content after "<!--", up to "-->".
+// Actions in it are lexed. "<!-->" and "<!--->" are empty comments that
+// close at once (WHATWG 13.2.5.43-44).
 func lexHTMLCommentBody(l *Scanner) stateFn {
-	// Check for abruptly closed comment before scanning for '-->' so that
-	// inputs like '<!-->z' don't fail with "unclosed HTML comment".
 	rest := l.input[l.pos:]
 	if len(rest) > 0 && rest[0] == '>' {
 		// <!--> : empty comment, close is just '>'.
@@ -419,34 +408,21 @@ func lexHTMLCommentClose(l *Scanner) stateFn {
 	return l.emit(TokenTypeHTMLCommentClose)
 }
 
-// lexHTMLText scans text in HTML mode, looking for template delimiters ({{)
-// and HTML tag starts (<). Emits itemHTMLText for intervening content.
+// lexHTMLText scans text up to the next action or tag.
 //
-// The lexer accepts every template text/template accepts, so markup it
-// cannot lex as a tag is text, as it is to text/template:
+// Every template text/template accepts must lex, so markup that is not a
+// well-formed tag is text, and the actions in it are still lexed. Among
+// such markup:
 //
-//   - A '<' not followed by an ASCII letter, '/', '!' or '?' is text, as
-//     in the WHATWG tokenizer's data state ("1 < 2", "I <3", "back <-").
-//     So is "</" not followed by an ASCII letter.
-//   - A start or end tag that is not well formed is text with actions:
-//     its source, from '<' through the '>' that closes it, is emitted as
-//     text, and template actions in it are still lexed as actions. A tag
-//     is not well formed when a template action or comment is in its tag
-//     name (<{{.Tag}}>, <h{{.N}}>), an attribute name (data-{{.Name}}=,
-//     {{.Name}}=), or anywhere in it if the action is a template comment
-//     the lexer emits (Options.EmitComment); when it has an attribute without a name or an
-//     unquoted attribute value that is empty; when it has a '/' that does
-//     not close it; when an {{end}}, {{else}} or {{define}} ends the
-//     control structure or definition the tag began in; when it is an
-//     end tag with anything but space after its name; and when the input
-//     ends before the tag closes. A comment the input ends inside of is
-//     text too, as is the "<!" or "<?" of a doctype or bogus comment
-//     whose '>' does not come before the next template action, and so is the "<!--" of a comment that a
-//     control structure crosses: one an action in it opens that does
-//     not end in it, or one it began in that an action in it ends.
+//   - a '<' not followed by an ASCII letter, '/', '!' or '?', as in "1 < 2";
+//   - a tag with an action or template comment in its name or in an
+//     attribute name, as in <h{{.N}}> and data-{{.K}}="v";
+//   - a tag or comment cut by an {{end}}, {{else}} or {{define}} that ends
+//     the control structure or definition it began in;
+//   - a tag or comment the input ends inside of.
 //
-// The text token that begins a degraded start tag carries the tag's name
-// in DegradedTag.
+// htmlTagAt has the whole rule. The text token that begins a start tag
+// read as text carries the tag's name in DegradedTag.
 func lexHTMLText(l *Scanner) stateFn {
 	rest := l.input[l.pos:]
 	// Find the earliest of {{ or <
@@ -628,12 +604,10 @@ func (l *Scanner) htmlCommentAt(j int) (isTag bool, textEnd int, name string) {
 	}
 }
 
-// htmlStartTagAt reports whether the start tag whose '<' is at
-// l.input[i] is well formed, mirroring what lexHTMLStartTagName,
-// lexHTMLAfterTagName and the attribute lexers accept and what the
-// parser accepts in a tag. A template action in the tag is skipped by
-// htmlActionAt; an action the lexer would report as malformed makes the
-// tag count as well formed, so that the action's own error is reported.
+// htmlStartTagAt reports whether the start tag whose '<' is at l.input[i]
+// is well formed. It must agree with what the tag lexers and the parser
+// accept. A malformed action in the tag counts as well formed, so that the
+// action's own error is reported.
 func (l *Scanner) htmlStartTagAt(i int) (isTag bool, textEnd int, name string) {
 	s := l.input
 	ld := l.Options.LeftDelim
@@ -919,13 +893,9 @@ func (l *Scanner) htmlActionAt(i int) (kind, end int) {
 	return kind, -1
 }
 
-// lexHTMLRawText scans the content of a raw text element (script, style,
-// textarea, title). Only two constructs are recognized:
-//   - {{  — template action delimiter (triggers scanLeftDelim)
-//   - </tagname>  — matching end tag (case-insensitive, space allowed
-//     before the '>'), ends raw text mode
-//
-// Everything else (bare <, </othertag>, etc.) is consumed as text.
+// lexHTMLRawText scans the content of script, style, textarea or title.
+// Only an action and the element's own end tag end the text; any other
+// '<' is part of it.
 func lexHTMLRawText(l *Scanner) stateFn {
 	for {
 		rest := l.input[l.pos:]
@@ -946,11 +916,8 @@ func lexHTMLRawText(l *Scanner) stateFn {
 		// space, '>', or '/'.
 		idxEndTag := -1
 		endTagPrefix := "</" + l.htmlRawTag
-		// ASCII-only lowering keeps byte offsets: strings.ToLower would
-		// widen each byte that is not UTF-8 to U+FFFD (three bytes), so
-		// its indexes would not fit rest and the end tag would be missed.
-		// A browser decodes such a byte as U+FFFD, a character like any
-		// other, and closes the element at its end tag.
+		// asciiLower keeps byte offsets; strings.ToLower widens bytes
+		// that are not UTF-8, and the end tag would be missed.
 		restLower := asciiLower(rest)
 		searchFrom := 0
 		for {
@@ -1019,9 +986,8 @@ func lexHTMLRawText(l *Scanner) stateFn {
 	}
 }
 
-// asciiLower returns s with ASCII upper case letters lowered and every
-// other byte as written, so it has the same length as s. HTML tag names
-// are matched ASCII case-insensitively.
+// asciiLower returns s with its ASCII letters lowered and every other byte
+// as written.
 func asciiLower(s string) string {
 	if !strings.ContainsFunc(s, func(r rune) bool { return 'A' <= r && r <= 'Z' }) {
 		return s
@@ -1039,8 +1005,7 @@ func isASCIIAlpha(r rune) bool {
 	return ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z')
 }
 
-// isHTMLTagNameChar reports whether r is valid in an HTML tag name.
-// Tag names consist of ASCII alphanumerics and hyphens.
+// isHTMLTagNameChar reports whether r is an ASCII letter, digit or hyphen.
 func isHTMLTagNameChar(r rune) bool {
 	return isASCIIAlpha(r) || (r >= '0' && r <= '9') || r == '-'
 }

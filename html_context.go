@@ -5,24 +5,19 @@ import (
 	"strings"
 )
 
-// HTMLContext represents the escaping context at a template action node.
-// This mirrors the key fields of html/template's context type.
+// HTMLContext is the escaping context of an action.
 type HTMLContext struct {
 	State   string // "text", "attr", "comment"
 	Element string // element name (e.g., "script", "style", "p") or ""
 	Attr    string // attribute name (e.g., "href", "onclick", "class") or ""
-	// JSContext is set when State is "text" and Element is "script". It is
-	// "expr" outside of any string/template literal, "str" inside ' or "
-	// strings, "tpl" inside backtick template literals, "regex" inside a
-	// regex literal, or "comment" inside a JS comment.
-	//
-	// A ${...} interpolation inside a template literal is an expression
-	// position, so it reports "expr", not "tpl".
+	// JSContext is set in script content: "expr", "str" in a quoted
+	// string, "tpl" in a template literal, "regex" or "comment". A ${...}
+	// in a template literal is "expr".
 	JSContext string
 }
 
-// AnnotateHTMLContexts walks the tree and sets HTMLContext on each ActionNode
-// based on its structural position in the AST.
+// AnnotateHTMLContexts sets HTMLContext on each ActionNode and TemplateNode
+// under root from its place in the tree.
 func AnnotateHTMLContexts(root Node) {
 	annotateContexts(root, "", "", false, "")
 }
@@ -131,17 +126,10 @@ func annotateBranch(n *BranchNode, parentElement, parentAttr string, inComment b
 	}
 }
 
-// annotateScriptChildren walks the children of a <script> element in source
-// order, scanning the text content as JavaScript to determine the context
-// (expression, string, template literal, comment) at each action position.
-//
-// The scanner is intentionally simple: it tracks string, template-literal
-// and comment delimiters, plus the brace depth of any ${...} interpolation
-// so it can tell a string position from the expression position inside an
-// interpolation. It does not otherwise interpret JS syntax. When the state
-// can't be determined (a control structure entered an unbalanced state),
-// the scanner conservatively reports "expr" so the value gets the stronger
-// jsValEscape treatment.
+// annotateScriptChildren scans a script element's text as JavaScript to
+// find the context of each action. It tracks only the delimiters of
+// strings, template literals and comments, and the braces of ${...}.
+// Where it cannot tell, it reports "expr", which gets the stronger escape.
 func annotateScriptChildren(children []Node) {
 	state := scriptScanState{ctx: "expr"}
 	for _, child := range children {
@@ -152,17 +140,14 @@ func annotateScriptChildren(children []Node) {
 type scriptScanState struct {
 	ctx   string // "expr", "str", "tpl", "regex", "lcomment", "bcomment"
 	quote byte   // for "str": '\'' or '"'
-	// braceDepth holds one entry per enclosing ${...} interpolation,
-	// counting the unmatched '{' seen inside it. A '}' that would take
-	// the innermost entry below zero closes that interpolation and
-	// returns the scanner to the surrounding template literal. An empty
-	// stack means the scanner is not inside any interpolation.
+	// braceDepth counts the unmatched '{' in each enclosing ${...},
+	// innermost last. A '}' that takes a count below zero closes that
+	// interpolation.
 	braceDepth []int
 }
 
-// clone returns a copy of s that shares no brace accounting with s.
-// Branch bodies are scanned from the state at branch entry, so they must
-// not write through to the enclosing scan's stack.
+// clone returns a copy with its own braceDepth, so that scanning a branch
+// body does not write to the enclosing scan.
 func (s scriptScanState) clone() scriptScanState {
 	s.braceDepth = slices.Clone(s.braceDepth)
 	return s
@@ -195,12 +180,9 @@ func annotateScriptNode(n Node, state scriptScanState) scriptScanState {
 		}
 		return state
 	case *IfNode:
-		// Template branches inside <script> are tricky: a branch can
-		// open a string or an interpolation and the matching else can
-		// close one. The safest option is to annotate each branch
-		// independently from the state at branch entry, then return the
-		// entry state — both branches must produce code that's
-		// syntactically balanced from the reader's perspective.
+		// A branch may open a string that its else closes, so each is
+		// scanned from the state at entry, which is also taken for the
+		// state after.
 		annotateScriptBranch(&n.BranchNode, state)
 		return state
 	case *RangeNode:
@@ -252,10 +234,8 @@ func scanScriptText(s string, state scriptScanState) scriptScanState {
 						continue
 					}
 				}
-				// Otherwise leave as-is: distinguishing regex from
-				// division requires lookback into JS tokens. The
-				// caller treats the default ("expr") as the safer
-				// option, so leave state alone.
+				// Telling a regex from a division takes JS tokens;
+				// "expr" is the safer reading.
 			case '{':
 				if len(state.braceDepth) > 0 {
 					state.braceDepth[len(state.braceDepth)-1]++
@@ -280,8 +260,7 @@ func scanScriptText(s string, state scriptScanState) scriptScanState {
 				state.ctx = "expr"
 				state.quote = 0
 			case '\n':
-				// Unterminated string. Reset to expr so the next
-				// action gets jsValEscape conservatively.
+				// An unterminated string: back to the stronger escape.
 				state.ctx = "expr"
 				state.quote = 0
 			}
@@ -292,8 +271,7 @@ func scanScriptText(s string, state scriptScanState) scriptScanState {
 					i++
 				}
 			case '$':
-				// "${" opens an interpolation, which is an expression
-				// position: code there runs.
+				// "${" opens an interpolation, where code runs.
 				if i+1 < len(s) && s[i+1] == '{' {
 					state.braceDepth = append(state.braceDepth, 0)
 					state.ctx = "expr"

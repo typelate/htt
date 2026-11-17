@@ -2,7 +2,7 @@ package lex
 
 import "fmt"
 
-// Token represents lexical unit
+// Token is a lexical unit.
 type Token struct {
 	Type      TokenType
 	Pos       Pos // The starting position, in bytes, of this item in the input string.
@@ -11,13 +11,13 @@ type Token struct {
 	Line      int
 	TrimLeft  bool // {{- was used
 	TrimRight bool // -}} was used
-	// DegradedTag is set on a TokenTypeHTMLText token that begins with the
-	// '<' of a start tag the lexer reads as text (see lexHTMLText): it is
-	// the tag name written before the construct that made the tag text.
-	// The parser uses it to read the element's end tag as text too.
+	// DegradedTag is the name of a start tag the lexer read as text. It is
+	// set on the text token that begins with the tag's '<', so that the
+	// parser reads the end tag as text too.
 	DegradedTag string
 }
 
+// String formats the token for error messages.
 func (i Token) String() string {
 	switch {
 	case i.Type == TokenTypeEOF:

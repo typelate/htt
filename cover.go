@@ -9,23 +9,16 @@ import (
 	"github.com/typelate/htt/lex"
 )
 
-// CoverProfile collects coverage information during template execution.
-//
-// Usage: create a CoverProfile, pass it to execute via WithCoverProfile,
-// then execute templates. Trees are added automatically during execution.
-// After execution, call WriteTo to produce a Go coverage profile.
-//
-// Coverage counters are embedded atomic.Int64 fields on AST nodes.
-// Execution increments them via .Add(1); WriteTo reads them via .Load().
+// CoverProfile collects which nodes of the executed trees ran. Pass one to
+// an execution with WithCoverProfile, then call WriteTo. The counters live
+// on the nodes, so a tree's counts span every execution of it.
 type CoverProfile struct {
 	mu    sync.Mutex
 	trees []*Tree
 	seen  map[*Tree]bool
 }
 
-// AddTree registers a tree for coverage reporting. Safe to call
-// multiple times for the same tree (idempotent). Must be called
-// before or during execution so WriteTo includes the tree's counters.
+// AddTree adds tree to the profile. Execution adds the trees it runs.
 func (cp *CoverProfile) AddTree(tree *Tree) {
 	if cp == nil || tree == nil {
 		return
@@ -42,7 +35,7 @@ func (cp *CoverProfile) AddTree(tree *Tree) {
 	cp.trees = append(cp.trees, tree)
 }
 
-// Init registers the tree for coverage. Called by the execution engine.
+// Init adds tree to the profile, as AddTree does.
 func (cp *CoverProfile) Init(tree *Tree) {
 	cp.AddTree(tree)
 }
@@ -55,8 +48,7 @@ type coverBlock struct {
 	count               int64
 }
 
-// WriteTo writes the coverage profile in the standard Go coverage format.
-// It walks each registered tree's AST, reading counters from nodes.
+// WriteTo writes the profile in the format of go tool cover.
 func (cp *CoverProfile) WriteTo(w io.Writer) (int64, error) {
 	if cp == nil {
 		return 0, nil
@@ -103,17 +95,11 @@ func (cp *CoverProfile) WriteTo(w io.Writer) (int64, error) {
 	return total, nil
 }
 
-// WriteNewlyCovered writes a line for each executed block of the profile's
-// trees that is not yet in written, then adds those blocks to written. It
-// is for exporting coverage incrementally: mode set is monotone, so a block
-// needs writing only once, the first time its counter is nonzero.
-//
-// Lines are in WriteTo's format, without the mode line, one block per
-// coverable node (not collapsed, since a neighbor reached later would
-// change a collapsed range) and with count 1. A block is identified by its
-// parse name and position range, so a reparsed tree whose blocks were
-// already written writes nothing. The lines go to w in one Write; if it
-// fails, nothing is added to written.
+// WriteNewlyCovered writes a line for each block that has run and is not in
+// written, then adds those blocks to written. The lines have WriteTo's
+// format, with no mode line. A block is keyed by parse name and position,
+// so a reparsed tree writes nothing twice. If the write fails, written is
+// left as it was.
 func (cp *CoverProfile) WriteNewlyCovered(w io.Writer, written map[string]struct{}) (int64, error) {
 	if cp == nil {
 		return 0, nil
@@ -163,8 +149,7 @@ func (cp *CoverProfile) WriteNewlyCovered(w io.Writer, written map[string]struct
 	return int64(n), err
 }
 
-// coverWalkNode recursively walks the AST, emitting coverage blocks for
-// coverable nodes. Blocks are flat and non-overlapping.
+// coverWalkNode appends the coverage blocks of node and its descendants.
 func coverWalkNode(tree *Tree, node Node, blocks []coverBlock) []coverBlock {
 	if node == nil {
 		return blocks
@@ -210,26 +195,22 @@ func coverWalkNode(tree *Tree, node Node, blocks []coverBlock) []coverBlock {
 	case *BlockNode:
 		blocks = coverWalkNode(tree, n.Body, blocks)
 	case *CommentNode:
-		// Template comments produce no output — no coverage.
+		// A template comment writes nothing, so it has no block.
 	}
 	return blocks
 }
 
-// coverWalkBranch emits blocks for a branch node's structural regions,
-// then recurses into children.
+// coverWalkBranch appends a branch's blocks: its opener, its body, its
+// {{else}} and else body, and its {{end}}.
 func coverWalkBranch(tree *Tree, blocks []coverBlock, b *BranchNode) []coverBlock {
-	// {{if/range/with ...}} — from branch start to List start
 	if b.List != nil {
 		blocks = appendBlock(tree, blocks, b.start, b.List.Start(), &b.openCount)
 	}
-	// Walk the true-branch body
 	blocks = coverWalkNode(tree, b.List, blocks)
-	// {{else}} — from List end to ElseList start
 	if b.ElseList != nil {
 		blocks = appendBlock(tree, blocks, b.List.End(), b.ElseList.Start(), &b.elseCount)
 		blocks = coverWalkNode(tree, b.ElseList, blocks)
 	}
-	// {{end}} — from last body end to branch end
 	lastEnd := b.start
 	if b.ElseList != nil {
 		lastEnd = b.ElseList.End()
@@ -240,32 +221,22 @@ func coverWalkBranch(tree *Tree, blocks []coverBlock, b *BranchNode) []coverBloc
 	return blocks
 }
 
-// coverWalkElement emits blocks for an element's coverable regions.
-// Each block counts as 1 statement:
-//   - <tag  — from element start to AttrStart (openCount)
-//   - each attribute — walked, producing its own blocks
-//   - >    — from last attr end to AttrEnd (attrCount)
-//   - each child — walked
-//   - </tag> — from EndTagStart to element end (closeCount)
+// coverWalkElement appends an element's blocks: "<tag", each attribute,
+// the '>' after them, each child and the end tag.
 func coverWalkElement(tree *Tree, blocks []coverBlock, elem *HTMLElementNode) []coverBlock {
-	// <tag
 	blocks = appendBlock(tree, blocks, elem.Start(), elem.AttrStart, &elem.openCount)
-	// Walk attribute children; each adds its own blocks.
 	for _, attr := range elem.Attr {
 		blocks = coverWalkNode(tree, attr, blocks)
 	}
-	// Closing ">"
 	attrCloseStart := elem.AttrStart
 	if len(elem.Attr) > 0 {
 		attrCloseStart = elem.Attr[len(elem.Attr)-1].End()
 	}
 	blocks = appendBlock(tree, blocks, attrCloseStart, elem.AttrEnd, &elem.attrCount)
 	if !elem.Void {
-		// Walk content children.
 		for _, child := range elem.Children {
 			blocks = coverWalkNode(tree, child, blocks)
 		}
-		// Close tag </tag>
 		if elem.Closed {
 			blocks = appendBlock(tree, blocks, elem.EndTagStart, elem.end, &elem.closeCount)
 		}
@@ -300,7 +271,7 @@ func appendBlock(tree *Tree, blocks []coverBlock, start, end lex.Pos, count *ato
 	})
 }
 
-// collapseBlocks merges consecutive blocks with the same count.
+// collapseBlocks merges consecutive blocks that have the same count.
 func collapseBlocks(blocks []coverBlock) []coverBlock {
 	if len(blocks) == 0 {
 		return nil

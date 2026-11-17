@@ -2,33 +2,24 @@ package htt
 
 import "reflect"
 
-// nodeParent is embedded in the structural nodes of the tree to record each
-// node's lexical parent. Expression-level nodes (numbers, identifiers,
-// pipelines, and other action internals) do not participate in tree navigation
-// and intentionally do not carry a parent.
+// nodeParent records a structural node's lexical parent. The nodes inside
+// an action have none.
 type nodeParent struct {
 	parent Node
 }
 
-// Parent returns the node's lexical parent, or nil for a root.
-//
-// A DefineNode and BlockNode are detached roots: their Parent is nil even
-// though they are written inside another template's source. The logical
-// parents of a define or block body are the {{template}} and {{block}} call
-// sites that invoke it, which are resolved by callers rather than recorded
-// here.
+// Parent returns the node's lexical parent. It is nil for a root, and for a
+// DefineNode or BlockNode, which root a template of their own.
 func (n nodeParent) Parent() Node { return n.parent }
 
 func (n *nodeParent) setParent(p Node) { n.parent = p }
 
-// parentSetter is implemented by every structural node via the embedded
-// nodeParent.
+// parentSetter is every node that embeds nodeParent.
 type parentSetter interface {
 	setParent(Node)
 }
 
-// setParents walks the tree and assigns every structural node its lexical
-// parent. It is called once after parsing.
+// setParents assigns each structural node its parent, once, after parsing.
 func (t *Tree) setParents() {
 	assignParents(t.Root, nil)
 }
@@ -40,8 +31,7 @@ func assignParents(n, parent Node) {
 	self := parent
 	switch n.(type) {
 	case *DefineNode, *BlockNode:
-		// Detached root: do not parent a define/block to its enclosing document.
-		self = nil
+		self = nil // the root of its own template
 	}
 	if ps, ok := n.(parentSetter); ok {
 		ps.setParent(self)
@@ -60,8 +50,8 @@ func isNilNode(n Node) bool {
 	return v.Kind() == reflect.Ptr && v.IsNil()
 }
 
-// forEachStructuralChild calls fn for each child node that participates in tree
-// navigation, in source order.
+// forEachStructuralChild calls fn for each structural child of n, in source
+// order.
 func forEachStructuralChild(n Node, fn func(Node)) {
 	switch n := n.(type) {
 	case *ListNode:

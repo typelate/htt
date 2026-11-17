@@ -7,11 +7,8 @@ import (
 	"github.com/typelate/htt/lex"
 )
 
-// HTMLDocumentFragmentNode is the top-level container for HTML+template content.
-// It wraps a flat list of top-level HTML and template nodes without imposing
-// well-formedness or mutating the tree. Structurally similar to ListNode,
-// but ListNode is used in template contexts (if/range/with bodies), while
-// DocumentFragment is the top-level container for HTML+template content.
+// HTMLDocumentFragmentNode holds the top-level nodes of a tree parsed in
+// HTML mode. It imposes no well-formedness.
 type HTMLDocumentFragmentNode struct {
 	nodeParent
 	tr         *Tree
@@ -37,17 +34,14 @@ func (n *HTMLDocumentFragmentNode) writeTo(sb *strings.Builder) {
 
 func (n *HTMLDocumentFragmentNode) tree() *Tree { return n.tr }
 
-// HTMLElementNode represents an HTML element in the parse tree.
-// TagName must be a static string (dynamic tag names are an error,
-// matching html/template's constraint).
-// Attr may contain HTMLAttributeNode, ActionNode, IfNode, RangeNode, etc.
-// Children contains the element's content nodes.
+// HTMLElementNode is an HTML element. A tag with an action in its name is
+// not an element: the parser reads it as text.
 type HTMLElementNode struct {
 	nodeParent
 	tr          *Tree
 	start, end  lex.Pos
-	TagName     string       // Must be static — dynamic tag names are an error.
-	Attr        []Node       // Attribute list: HTMLAttributeNode, ActionNode, IfNode, RangeNode, etc.
+	TagName     string       // The tag name as written.
+	Attr        []Node       // HTMLAttributeNode values, and the actions and control structures among them.
 	Children    []Node       // Child nodes in lexical order.
 	Void        bool         // True for void elements (br, hr, img, etc.).
 	Closed      bool         // True if the parser found a matching end tag.
@@ -90,9 +84,8 @@ func (n *HTMLElementNode) writeTo(sb *strings.Builder) {
 
 func (n *HTMLElementNode) tree() *Tree { return n.tr }
 
-// HTMLAttributeNode represents an HTML attribute.
-// Key and Value are slices of Node to support dynamic content (interleaved
-// TextNode + ActionNode). HasValue distinguishes `disabled` from `disabled=""`.
+// HTMLAttributeNode is an HTML attribute. Key and Value interleave text
+// with actions.
 type HTMLAttributeNode struct {
 	nodeParent
 	tr         *Tree
@@ -132,9 +125,8 @@ func (n *HTMLAttributeNode) writeTo(sb *strings.Builder) {
 
 func (n *HTMLAttributeNode) tree() *Tree { return n.tr }
 
-// HTMLCommentNode represents an HTML comment.
-// Children (not Text) supports template actions inside comments:
-// <!-- version: {{.Version}} -->
+// HTMLCommentNode is an HTML comment. Children interleaves its text with
+// the actions written in it.
 type HTMLCommentNode struct {
 	nodeParent
 	tr         *Tree
@@ -162,7 +154,7 @@ func (n *HTMLCommentNode) writeTo(sb *strings.Builder) {
 	sb.WriteString("-->")
 }
 
-// HTMLDoctypeNode represents an HTML DOCTYPE declaration.
+// HTMLDoctypeNode is a DOCTYPE declaration.
 type HTMLDoctypeNode struct {
 	nodeParent
 	tr         *Tree

@@ -1,5 +1,5 @@
-// Package lex provides the template and HTML lexer, source positions, and
-// parse options used by the muxt template parser.
+// Package lex is the lexer for package htt. It tokenizes template actions
+// and, in HTML mode, the tags, attributes and comments around them.
 package lex
 
 import (
@@ -11,14 +11,9 @@ import (
 
 const eof = -1
 
-// Trimming spaces.
-// If the action begins "{{- " rather than "{{", then all space/tab/newlines
-// preceding the action are trimmed; conversely if it ends " -}}" the
-// leading spaces are trimmed. This is done entirely in the lexer; the
-// parser never sees it happen. We require an ASCII space (' ', \t, \r, \n)
-// to be present to avoid ambiguity with things like "{{-3}}". It reads
-// better with the space present anyway. For simplicity, only ASCII
-// does the job.
+// A trim marker is '-' with an ASCII space between it and the action's
+// contents: "{{- " and " -}}". The space keeps "{{-3}}" a number. The
+// lexer reports markers on tokens and leaves the text around them alone.
 const (
 	trimMarker    = '-'        // Attached to left/right delimiter, trims trailing spaces from preceding/following text.
 	trimMarkerLen = Pos(1 + 1) // marker plus space before or after
@@ -27,7 +22,7 @@ const (
 // stateFn represents the state of the scanner as a function that returns the next state.
 type stateFn func(*Scanner) stateFn
 
-// Scanner holds the state of the scanner.
+// Scanner tokenizes one template.
 type Scanner struct {
 	input           string // the string being scanned
 	pos             Pos    // current position in the input
@@ -45,23 +40,22 @@ type Scanner struct {
 	htmlTextEnd     Pos     // no HTML tag starts before this position: it is inside markup read as text
 }
 
-// Options control behavior of the lexer. All default to false.
+// Options control the lexer and the parser that reads it.
 type Options struct {
-	EmitComment  bool // emit TokenTypeComment tokens.
-	BreakOK      bool // break keyword allowed
-	ContinueOK   bool // continue keyword allowed
-	ParseHTML    bool
-	LeftDelim    string // start of action marker
-	RightDelim   string // end of action marker
-	MaxHTMLDepth int    // maximum nesting depth for HTML elements; 0 means use default (1024)
-	// Functions, when not nil, turns on text/template's parse-time check
-	// that a called function is defined: it holds the names of the
-	// functions the template set registered, and a call of a name that is
-	// neither one of them nor a text/template builtin is a parse error,
-	// `function "name" not defined`. Nil leaves function names unchecked.
+	EmitComment  bool   // emit TokenTypeComment tokens.
+	BreakOK      bool   // break keyword allowed
+	ContinueOK   bool   // continue keyword allowed
+	ParseHTML    bool   // lex tags, attributes and comments
+	LeftDelim    string // start of action marker; "" means "{{"
+	RightDelim   string // end of action marker; "" means "}}"
+	MaxHTMLDepth int    // maximum nesting depth for HTML elements; 0 means 1024
+	// Functions, when not nil, names the registered functions. A call of
+	// any other name that is not a builtin is then a parse error.
 	Functions map[string]bool
 }
 
+// NewOptions returns the options for HTML mode with the default delimiters.
+// break and continue are keywords unless a function map defines them.
 func NewOptions(funcMaps ...map[string]any) Options {
 	return Options{
 		EmitComment:  true,
@@ -165,6 +159,7 @@ func (l *Scanner) errorf(format string, args ...any) stateFn {
 	return nil
 }
 
+// Next returns the next token.
 func (l *Scanner) Next() Token {
 	l.item = Token{Type: TokenTypeEOF, Pos: l.pos, End: l.pos, Value: "EOF", Line: l.startLine}
 	var state stateFn
@@ -188,6 +183,7 @@ func (l *Scanner) Next() Token {
 	}
 }
 
+// New returns a Scanner for input.
 func New(input string, options Options) *Scanner {
 	if options.LeftDelim == "" {
 		options.LeftDelim = leftDelim
