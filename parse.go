@@ -565,9 +565,9 @@ func (t *Tree) action() (Node, error) {
 	case lex.TokenTypeBlock:
 		return t.blockControl()
 	case lex.TokenTypeBreak:
-		return t.breakControl(t.actionPos, token.Line)
+		return t.breakControl(t.actionPos, token.Pos, token.Line)
 	case lex.TokenTypeContinue:
-		return t.continueControl(t.actionPos, token.Line)
+		return t.continueControl(t.actionPos, token.Pos, token.Line)
 	case lex.TokenTypeElse:
 		return t.elseControl()
 	case lex.TokenTypeEnd:
@@ -600,7 +600,7 @@ func (t *Tree) action() (Node, error) {
 //	{{break}}
 //
 // Break keyword is past.
-func (t *Tree) breakControl(pos lex.Pos, line int) (Node, error) {
+func (t *Tree) breakControl(pos, keyword lex.Pos, line int) (Node, error) {
 	token := t.nextNonSpace()
 	if token.Type != lex.TokenTypeRightDelim {
 		return nil, t.unexpected(token, "{{break}}")
@@ -609,6 +609,7 @@ func (t *Tree) breakControl(pos lex.Pos, line int) (Node, error) {
 		return nil, t.errorf("{{break}} outside {{range}}")
 	}
 	n := t.newBreak(pos, token.End, line)
+	n.keyword = keyword
 	n.TrimLeft = t.actionTrimLeft
 	n.TrimRight = token.TrimRight
 	return n, nil
@@ -619,7 +620,7 @@ func (t *Tree) breakControl(pos lex.Pos, line int) (Node, error) {
 //	{{continue}}
 //
 // Continue keyword is past.
-func (t *Tree) continueControl(pos lex.Pos, line int) (Node, error) {
+func (t *Tree) continueControl(pos, keyword lex.Pos, line int) (Node, error) {
 	token := t.nextNonSpace()
 	if token.Type != lex.TokenTypeRightDelim {
 		return nil, t.unexpected(token, "{{continue}}")
@@ -628,6 +629,7 @@ func (t *Tree) continueControl(pos lex.Pos, line int) (Node, error) {
 		return nil, t.errorf("{{continue}} outside {{range}}")
 	}
 	n := t.newContinue(pos, token.End, line)
+	n.keyword = keyword
 	n.TrimLeft = t.actionTrimLeft
 	n.TrimRight = token.TrimRight
 	return n, nil
@@ -983,6 +985,7 @@ func (t *Tree) blockControl() (Node, error) {
 	}
 
 	b := t.newBlock(actionPos, end.End(), token.Line, name, pipe, body)
+	b.call.nameStart = token.Pos
 	b.StartTrimLeft = startTrimLeft
 	b.StartTrimRight = startTrimRight
 	b.EndTrimLeft = en.TrimLeft
@@ -1015,11 +1018,13 @@ func (t *Tree) templateControl() (Node, error) {
 			return nil, err
 		}
 		n := t.newTemplate(actionPos, pipe.end, token.Line, name, pipe)
+		n.nameStart = token.Pos
 		n.TrimLeft = trimLeft
 		n.TrimRight = t.actionTrimRight
 		return n, nil
 	}
 	n := t.newTemplate(actionPos, rightDelim.End, token.Line, name, pipe)
+	n.nameStart = token.Pos
 	n.TrimLeft = trimLeft
 	n.TrimRight = rightDelim.TrimRight
 	return n, nil

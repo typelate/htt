@@ -529,6 +529,7 @@ type BreakNode struct {
 	nodeParent
 	tr         *Tree
 	start, end lex.Pos
+	keyword    lex.Pos
 	Line       int
 	count      atomic.Int64
 	TrimLeft   bool // {{- was used
@@ -545,11 +546,15 @@ func (b *BreakNode) String() string              { return b.tr.src(b.Start(), b.
 func (b *BreakNode) tree() *Tree                 { return b.tr }
 func (b *BreakNode) writeTo(sb *strings.Builder) { sb.WriteString("{{break}}") }
 
+// KeywordStart returns the offset of the break keyword in the source.
+func (b *BreakNode) KeywordStart() lex.Pos { return b.keyword }
+
 // ContinueNode represents a {{continue}} action.
 type ContinueNode struct {
 	nodeParent
 	tr         *Tree
 	start, end lex.Pos
+	keyword    lex.Pos
 	Line       int
 	count      atomic.Int64
 	TrimLeft   bool // {{- was used
@@ -565,6 +570,9 @@ func (c *ContinueNode) End() lex.Pos                { return c.end }
 func (c *ContinueNode) String() string              { return c.tr.src(c.Start(), c.End()) }
 func (c *ContinueNode) tree() *Tree                 { return c.tr }
 func (c *ContinueNode) writeTo(sb *strings.Builder) { sb.WriteString("{{continue}}") }
+
+// KeywordStart returns the offset of the continue keyword in the source.
+func (c *ContinueNode) KeywordStart() lex.Pos { return c.keyword }
 
 // RangeNode represents a {{range}} action and its commands.
 type RangeNode struct {
@@ -593,6 +601,7 @@ type TemplateNode struct {
 	nodeParent
 	tr          *Tree
 	start, end  lex.Pos
+	nameStart   lex.Pos
 	Line        int          // The line number in the input. Deprecated: Kept for compatibility.
 	Name        string       // The name of the template (unquoted).
 	Pipe        *PipeNode    // The command to evaluate as dot for the template.
@@ -613,6 +622,9 @@ func (t *TemplateNode) String() string {
 }
 
 func (t *TemplateNode) tree() *Tree { return t.tr }
+
+// NameStart returns the offset of the template's name in the source.
+func (t *TemplateNode) NameStart() lex.Pos { return t.nameStart }
 
 func (t *TemplateNode) writeTo(sb *strings.Builder) {
 	sb.WriteString("{{template ")

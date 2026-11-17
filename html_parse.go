@@ -515,9 +515,9 @@ func (t *Tree) htmlParseTemplateAction() (Node, error) {
 	case lex.TokenTypeBlock:
 		return t.blockControl()
 	case lex.TokenTypeBreak:
-		return t.breakControl(t.actionPos, token.Line)
+		return t.breakControl(t.actionPos, token.Pos, token.Line)
 	case lex.TokenTypeContinue:
-		return t.continueControl(t.actionPos, token.Line)
+		return t.continueControl(t.actionPos, token.Pos, token.Line)
 	case lex.TokenTypeDefine:
 		return t.htmlDefineControl(token)
 	case lex.TokenTypeElse:
