@@ -323,152 +323,30 @@ func (s *state) walkRangeNode(dot reflect.Value, r *RangeNode) error {
 	}
 	val, _ = indirect(val)
 	mark := len(s.vars)
-	oneIteration := func(index, elem reflect.Value) error {
-		if len(r.Pipe.Decl) > 0 {
-			if r.Pipe.IsAssign {
-				// Assign mode: update existing variables
-				if len(r.Pipe.Decl) > 1 {
-					s.setVar(r.Pipe.Decl[0].Ident[0], index)
-				}
-				s.setVar(r.Pipe.Decl[len(r.Pipe.Decl)-1].Ident[0], elem)
-			} else {
-				// Declaration: set top of stack
-				s.setTopVar(1, elem)
-				if len(r.Pipe.Decl) > 1 {
-					s.setTopVar(2, index)
-				}
-			}
-		}
+	ran, err := s.rangeOver(val, func(index, elem reflect.Value) (bool, error) {
+		s.setRangeVars(r.Pipe, index, elem)
 		lastTrim := r.EndTrimLeft
 		if r.ElseList != nil && len(r.ElseList.Nodes) > 0 {
 			lastTrim = r.ElseTrimLeft
 		}
-		return s.walkList(elem, r.List, r.StartTrimRight, lastTrim)
+		err := s.walkList(elem, r.List, r.StartTrimRight, lastTrim)
+		if isBreak(err) {
+			return true, nil
+		}
+		if isContinue(err) {
+			return false, nil
+		}
+		return false, err
+	})
+	if err != nil {
+		return err
 	}
-	switch val.Kind() {
-	case reflect.Array, reflect.Slice:
-		if val.Len() == 0 {
-			break
-		}
-		for i := 0; i < val.Len(); i++ {
-			if err := oneIteration(reflect.ValueOf(i), val.Index(i)); err != nil {
-				if isBreak(err) {
-					break
-				}
-				if isContinue(err) {
-					continue
-				}
-				return err
-			}
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return nil
-	case reflect.Map:
-		if val.Len() == 0 {
-			break
-		}
-		iter := val.MapRange()
-		for iter.Next() {
-			if err := oneIteration(iter.Key(), iter.Value()); err != nil {
-				if isBreak(err) {
-					break
-				}
-				if isContinue(err) {
-					continue
-				}
-				return err
-			}
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return nil
-	case reflect.Chan:
-		if val.IsNil() {
-			break
-		}
-		if val.Type().ChanDir() == reflect.SendDir {
-			return s.errorf("range over send-only channel %v", val)
-		}
-		i, received := 0, false
-		for {
-			elem, ok := val.Recv()
-			if !ok {
-				break
-			}
-			received = true
-			if err := oneIteration(reflect.ValueOf(i), elem); err != nil {
-				if isBreak(err) {
-					break
-				}
-				if isContinue(err) {
-					i++
-					continue
-				}
-				return err
-			}
-			i++
-		}
-		if !received {
-			break
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return nil
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		count := val.Int()
-		if count <= 0 {
-			break
-		}
-		for i := int64(0); i < count; i++ {
-			if err := oneIteration(reflect.ValueOf(int(i)), reflect.ValueOf(int(i))); err != nil {
-				if isBreak(err) {
-					break
-				}
-				if isContinue(err) {
-					continue
-				}
-				return err
-			}
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		count := val.Uint()
-		if count == 0 {
-			break
-		}
-		for i := uint64(0); i < count; i++ {
-			if err := oneIteration(reflect.ValueOf(int(i)), reflect.ValueOf(int(i))); err != nil {
-				if isBreak(err) {
-					break
-				}
-				if isContinue(err) {
-					continue
-				}
-				return err
-			}
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return nil
-	case reflect.Invalid:
-		// nil is like empty
-		break
-	default:
-		return s.errorf("range can't iterate over %v", val)
-	}
-	// Empty — run else if present.
 	s.vars = s.vars[:mark]
-	if r.ElseList != nil {
+	if !ran && r.ElseList != nil {
 		r.BranchNode.elseCount.Add(1)
-		walkErr := s.walkList(dot, r.ElseList, r.ElseTrimRight, r.EndTrimLeft)
-		if walkErr != nil {
+		if walkErr := s.walkList(dot, r.ElseList, r.ElseTrimRight, r.EndTrimLeft); walkErr != nil {
 			return walkErr
 		}
-		r.BranchNode.endCount.Add(1)
-		return nil
 	}
 	r.BranchNode.endCount.Add(1)
 	return nil
@@ -1345,156 +1223,36 @@ func (s *state) walkHTMLRange(dot reflect.Value, r *RangeNode) ([]*html.Node, er
 	val, _ = indirect(val)
 	mark := len(s.vars)
 	var result []*html.Node
-	oneIteration := func(index, elem reflect.Value) error {
-		if len(r.Pipe.Decl) > 0 {
-			if r.Pipe.IsAssign {
-				if len(r.Pipe.Decl) > 1 {
-					s.setVar(r.Pipe.Decl[0].Ident[0], index)
-				}
-				s.setVar(r.Pipe.Decl[len(r.Pipe.Decl)-1].Ident[0], elem)
-			} else {
-				s.setTopVar(1, elem)
-				if len(r.Pipe.Decl) > 1 {
-					s.setTopVar(2, index)
-				}
-			}
-		}
+	ran, err := s.rangeOver(val, func(index, elem reflect.Value) (bool, error) {
+		s.setRangeVars(r.Pipe, index, elem)
 		lastTrim := r.EndTrimLeft
 		if r.ElseList != nil && len(r.ElseList.Nodes) > 0 {
 			lastTrim = r.ElseTrimLeft
 		}
 		nodes, err := s.walkHTMLList(elem, r.List, r.StartTrimRight, lastTrim)
 		result = append(result, nodes...)
-		if err != nil {
-			return err
+		if isBreak(err) {
+			return true, nil
 		}
-		return nil
-	}
-	switch val.Kind() {
-	case reflect.Array, reflect.Slice:
-		if val.Len() == 0 {
-			break
+		if isContinue(err) {
+			return false, nil
 		}
-		for i := 0; i < val.Len(); i++ {
-			if err := oneIteration(reflect.ValueOf(i), val.Index(i)); err != nil {
-				if isBreak(err) {
-					break
-				}
-				if isContinue(err) {
-					continue
-				}
-				return nil, err
-			}
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return result, nil
-	case reflect.Map:
-		if val.Len() == 0 {
-			break
-		}
-		iter := val.MapRange()
-		for iter.Next() {
-			if err := oneIteration(iter.Key(), iter.Value()); err != nil {
-				if isBreak(err) {
-					break
-				}
-				if isContinue(err) {
-					continue
-				}
-				return nil, err
-			}
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return result, nil
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		count := val.Int()
-		if count <= 0 {
-			break
-		}
-		for i := int64(0); i < count; i++ {
-			if err := oneIteration(reflect.ValueOf(int(i)), reflect.ValueOf(int(i))); err != nil {
-				if isBreak(err) {
-					break
-				}
-				if isContinue(err) {
-					continue
-				}
-				return nil, err
-			}
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return result, nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		count := val.Uint()
-		if count == 0 {
-			break
-		}
-		for i := uint64(0); i < count; i++ {
-			if err := oneIteration(reflect.ValueOf(int(i)), reflect.ValueOf(int(i))); err != nil {
-				if isBreak(err) {
-					break
-				}
-				if isContinue(err) {
-					continue
-				}
-				return nil, err
-			}
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return result, nil
-	case reflect.Chan:
-		if val.IsNil() {
-			break
-		}
-		if val.Type().ChanDir() == reflect.SendDir {
-			return nil, s.errorf("range over send-only channel %v", val)
-		}
-		i, received := 0, false
-		for {
-			elem, ok := val.Recv()
-			if !ok {
-				break
-			}
-			received = true
-			if err := oneIteration(reflect.ValueOf(i), elem); err != nil {
-				if isBreak(err) {
-					break
-				}
-				if isContinue(err) {
-					i++
-					continue
-				}
-				return nil, err
-			}
-			i++
-		}
-		if !received {
-			break
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return result, nil
-	case reflect.Invalid:
-		break
-	default:
-		return nil, s.errorf("range can't iterate over %v", val)
+		return false, err
+	})
+	if err != nil {
+		return nil, err
 	}
 	s.vars = s.vars[:mark]
-	if r.ElseList != nil {
+	if !ran && r.ElseList != nil {
 		r.BranchNode.elseCount.Add(1)
 		nodes, walkErr := s.walkHTMLList(dot, r.ElseList, r.ElseTrimRight, r.EndTrimLeft)
 		if walkErr != nil {
 			return nodes, walkErr
 		}
-		r.BranchNode.endCount.Add(1)
-		return nodes, nil
+		result = nodes
 	}
 	r.BranchNode.endCount.Add(1)
-	return nil, nil
+	return result, nil
 }
 
 func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.Node, error) {
@@ -1652,120 +1410,29 @@ func (s *state) walkHTMLAttrRange(dot reflect.Value, r *RangeNode) ([]sourceAttr
 	val, _ = indirect(val)
 	mark := len(s.vars)
 	var result []sourceAttr
-	oneIteration := func(index, elem reflect.Value) error {
-		if len(r.Pipe.Decl) > 0 {
-			if r.Pipe.IsAssign {
-				if len(r.Pipe.Decl) > 1 {
-					s.setVar(r.Pipe.Decl[0].Ident[0], index)
-				}
-				s.setVar(r.Pipe.Decl[len(r.Pipe.Decl)-1].Ident[0], elem)
-			} else {
-				s.setTopVar(1, elem)
-				if len(r.Pipe.Decl) > 1 {
-					s.setTopVar(2, index)
-				}
-			}
-		}
+	ran, err := s.rangeOver(val, func(index, elem reflect.Value) (bool, error) {
+		s.setRangeVars(r.Pipe, index, elem)
 		attrs, err := s.walkHTMLAttrList(elem, r.List)
 		if err != nil {
-			return err
+			return false, err
 		}
 		result = append(result, attrs...)
-		return nil
-	}
-	switch val.Kind() {
-	case reflect.Array, reflect.Slice:
-		if val.Len() == 0 {
-			break
-		}
-		for i := 0; i < val.Len(); i++ {
-			if err := oneIteration(reflect.ValueOf(i), val.Index(i)); err != nil {
-				return nil, err
-			}
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return result, nil
-	case reflect.Map:
-		if val.Len() == 0 {
-			break
-		}
-		iter := val.MapRange()
-		for iter.Next() {
-			if err := oneIteration(iter.Key(), iter.Value()); err != nil {
-				return nil, err
-			}
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return result, nil
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		count := val.Int()
-		if count <= 0 {
-			break
-		}
-		for i := int64(0); i < count; i++ {
-			if err := oneIteration(reflect.ValueOf(int(i)), reflect.ValueOf(int(i))); err != nil {
-				return nil, err
-			}
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return result, nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		count := val.Uint()
-		if count == 0 {
-			break
-		}
-		for i := uint64(0); i < count; i++ {
-			if err := oneIteration(reflect.ValueOf(int(i)), reflect.ValueOf(int(i))); err != nil {
-				return nil, err
-			}
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return result, nil
-	case reflect.Chan:
-		if val.IsNil() {
-			break
-		}
-		if val.Type().ChanDir() == reflect.SendDir {
-			return nil, s.errorf("range over send-only channel %v", val)
-		}
-		i := 0
-		for {
-			elem, ok := val.Recv()
-			if !ok {
-				break
-			}
-			if err := oneIteration(reflect.ValueOf(i), elem); err != nil {
-				return nil, err
-			}
-			i++
-		}
-		if i == 0 {
-			break
-		}
-		s.vars = s.vars[:mark]
-		r.BranchNode.endCount.Add(1)
-		return result, nil
-	case reflect.Invalid:
-		break
-	default:
-		return nil, s.errorf("range can't iterate over %v", val)
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	s.vars = s.vars[:mark]
-	if r.ElseList != nil {
+	if !ran && r.ElseList != nil {
 		r.BranchNode.elseCount.Add(1)
 		attrs, walkErr := s.walkHTMLAttrList(dot, r.ElseList)
 		if walkErr != nil {
 			return nil, walkErr
 		}
-		r.BranchNode.endCount.Add(1)
-		return attrs, nil
+		result = attrs
 	}
 	r.BranchNode.endCount.Add(1)
-	return nil, nil
+	return result, nil
 }
 
 func (s *state) walkHTMLAttrList(dot reflect.Value, list *ListNode) ([]sourceAttr, error) {
