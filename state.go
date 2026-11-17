@@ -150,7 +150,11 @@ func (s *state) walk(dot reflect.Value, node Node) error {
 		return s.walkList(dot, n, false, false)
 	case *TextNode:
 		n.count.Add(1)
-		if _, err := s.wr.Write(n.Text); err != nil {
+		text := n.Text
+		if repl, ok := s.replaceText(n); ok {
+			text = repl
+		}
+		if _, err := s.wr.Write(text); err != nil {
 			return s.writeError(err)
 		}
 	case *ActionNode:
@@ -186,6 +190,13 @@ func (s *state) walkList(dot reflect.Value, list *ListNode, trimFirst, trimLast 
 	nodes := list.Nodes
 	for i, node := range nodes {
 		if tn, ok := node.(*TextNode); ok {
+			tn.count.Add(1)
+			if repl, ok := s.replaceText(tn); ok {
+				if _, err := s.wr.Write(repl); err != nil {
+					return s.writeError(err)
+				}
+				continue
+			}
 			text := tn.Text
 			if (i == 0 && trimFirst) || (i > 0 && nodeRightTrim(nodes[i-1])) {
 				text = bytes.TrimLeft(text, trimCutset)
@@ -193,7 +204,6 @@ func (s *state) walkList(dot reflect.Value, list *ListNode, trimFirst, trimLast 
 			if (i == len(nodes)-1 && trimLast) || (i < len(nodes)-1 && nodeLeftTrim(nodes[i+1])) {
 				text = bytes.TrimRight(text, trimCutset)
 			}
-			tn.count.Add(1)
 			if len(text) > 0 {
 				if _, err := s.wr.Write(text); err != nil {
 					return s.writeError(err)

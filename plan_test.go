@@ -14,6 +14,11 @@ import (
 // planFunc adapts a function to htt.Plan.
 type planFunc func(instance string, n *htt.ActionNode) (htt.ActionEdit, bool)
 
+// Text leaves every text node as it is.
+func (f planFunc) Text(string, *htt.TextNode) ([]byte, bool) {
+	return nil, false
+}
+
 // Action calls f.
 func (f planFunc) Action(instance string, n *htt.ActionNode) (htt.ActionEdit, bool) {
 	return f(instance, n)
@@ -107,6 +112,85 @@ func TestPlanEditsAnActionsOutput(t *testing.T) {
 			var buf bytes.Buffer
 			err = htt.ExecuteTemplate(&buf, root, tt.data,
 				htt.WithFinder(finder), htt.WithPlan(tt.plan, tt.instance))
+			require.NoError(t, err)
+			if got := buf.String(); got != tt.want {
+				t.Errorf("execute(%q) = %q, want %q", tt.text, got, tt.want)
+			}
+		})
+	}
+}
+
+// textPlan replaces text nodes through text and leaves actions alone.
+type textPlan func(instance string, n *htt.TextNode) ([]byte, bool)
+
+// Text calls f.
+func (f textPlan) Text(instance string, n *htt.TextNode) ([]byte, bool) {
+	return f(instance, n)
+}
+
+// Action leaves every action as it is.
+func (f textPlan) Action(string, *htt.ActionNode) (htt.ActionEdit, bool) {
+	return htt.ActionEdit{}, false
+}
+
+// replaceText returns a plan that replaces the text node whose source text is text.
+func replaceText(text, repl string) textPlan {
+	return func(_ string, n *htt.TextNode) ([]byte, bool) {
+		if string(n.Text) != text {
+			return nil, false
+		}
+		return []byte(repl), true
+	}
+}
+
+func TestPlanReplacesText(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		text string
+		data any
+		plan textPlan
+		want string
+	}{
+		{
+			name: "a replaced text node is written as the plan gives it",
+			text: `hello`,
+			plan: replaceText(`hello`, `bye`),
+			want: "bye",
+		},
+		{
+			name: "a text node without a replacement is written as it is",
+			text: `keep`,
+			plan: replaceText(`other`, `bye`),
+			want: "keep",
+		},
+		{
+			name: "a replacement next to a trim marker keeps its spaces",
+			text: `a {{- .}}`,
+			data: "v",
+			plan: replaceText(`a `, ` x `),
+			want: " x v",
+		},
+		{
+			name: "an empty replacement writes nothing",
+			text: `a{{.}}gone`,
+			data: "v",
+			plan: replaceText(`gone`, ``),
+			want: "av",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			treeSet := make(map[string]*htt.Tree)
+			root, err := htt.ParseTree("root", "root", tt.text, treeSet, lex.Options{})
+			require.NoError(t, err)
+			trees := htt.DefinedTrees(root, treeSet)
+			finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
+				tree, ok := trees[name]
+				return tree, ok
+			})
+
+			var buf bytes.Buffer
+			err = htt.ExecuteTemplate(&buf, root, tt.data,
+				htt.WithFinder(finder), htt.WithPlan(tt.plan, ""))
 			require.NoError(t, err)
 			if got := buf.String(); got != tt.want {
 				t.Errorf("execute(%q) = %q, want %q", tt.text, got, tt.want)
