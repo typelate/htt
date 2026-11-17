@@ -35,6 +35,44 @@ func (cp *CoverProfile) AddTree(tree *Tree) {
 	cp.trees = append(cp.trees, tree)
 }
 
+// CoverBlock is one span of a template's source that a cover profile counts.
+type CoverBlock struct {
+	ParseName              string
+	StartLine, StartColumn int
+	EndLine, EndColumn     int
+	Count                  int64 // how many times the block has run
+}
+
+// String returns the block as a cover profile names it:
+// name:line.column,line.column.
+func (b CoverBlock) String() string {
+	return b.ParseName + ":" +
+		strconv.Itoa(b.StartLine) + "." + strconv.Itoa(b.StartColumn) + "," +
+		strconv.Itoa(b.EndLine) + "." + strconv.Itoa(b.EndColumn)
+}
+
+// CoverBlocks returns the tree's coverable blocks in source order, one per
+// coverable node, as WriteNewlyCovered writes them. A tree with no parse
+// name has none.
+func (t *Tree) CoverBlocks() []CoverBlock {
+	blocks := coverWalkNode(t, t.Root, nil)
+	if len(blocks) == 0 {
+		return nil
+	}
+	out := make([]CoverBlock, len(blocks))
+	for i, b := range blocks {
+		out[i] = CoverBlock{
+			ParseName:   b.parseName,
+			StartLine:   b.startLine,
+			StartColumn: b.startCol,
+			EndLine:     b.endLine,
+			EndColumn:   b.endCol,
+			Count:       b.count,
+		}
+	}
+	return out
+}
+
 type coverBlock struct {
 	parseName           string
 	startLine, startCol int
