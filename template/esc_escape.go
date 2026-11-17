@@ -28,9 +28,11 @@ import (
 // escapeTemplate escapes the named template and every template it calls,
 // and returns the plan for running it as the shadow trees in trees.
 // Changed: it returns a plan instead of rewriting trees, and errUnsupported
-// where the plan cannot yet be used.
-func escapeTemplate(trees map[string]*htt.Tree, name string) (*escapePlan, error) {
+// where the plan cannot yet be used. defined reports the templates that
+// exist without a shadow tree.
+func escapeTemplate(trees map[string]*htt.Tree, defined func(string) bool, name string) (*escapePlan, error) {
 	e := makeEscaper(trees)
+	e.defined = defined
 	c, _ := e.escapeTree(context{}, nil, name, 0)
 	var err error
 	if c.err != nil {
@@ -38,13 +40,13 @@ func escapeTemplate(trees map[string]*htt.Tree, name string) (*escapePlan, error
 	} else if c.state != stateText {
 		err = &Error{ErrEndContext, nil, name, 0, fmt.Sprintf("ends in a non-text context: %v", c)}
 	}
-	if err != nil {
-		// Changed: html/template reports this at Execute; it is not reported
-		// yet, so the old engine runs.
-		return nil, fmt.Errorf("%w: %w", errUnsupported, err)
-	}
+	// Changed: an error found while the plan is unusable may be an artifact
+	// of that, so the unusable plan is reported first.
 	if e.unsupported != "" {
 		return nil, fmt.Errorf("%w: %s", errUnsupported, e.unsupported)
+	}
+	if err != nil {
+		return nil, err
 	}
 	return e.commit(), nil
 }
@@ -79,6 +81,9 @@ type escaper struct {
 	rangeContext *rangeContext
 	// unsupported says why the plan cannot be used yet, or is empty. Changed: new.
 	unsupported string
+	// defined reports whether a template of the set has a tree, shadow or not.
+	// Changed: new.
+	defined func(string) bool
 }
 
 // rangeContext holds information about the current range loop.
@@ -446,6 +451,7 @@ func (e *escaper) escapeList(c context, n *htt.ListNode, trimFirst, trimLast boo
 // which is the same as whether e was updated.
 func (e *escaper) escapeListConditionally(c context, n *htt.ListNode, trimFirst, trimLast bool, filter func(*escaper, context) bool) (context, bool) {
 	e1 := makeEscaper(e.trees)
+	e1.defined = e.defined
 	e1.instance = e.instance
 	e1.rangeContext = e.rangeContext
 	// Make type inferences available to f.
@@ -496,9 +502,11 @@ func (e *escaper) escapeTree(c context, node htt.Node, name string, line int) (c
 	}
 	t := e.trees[name]
 	if t == nil {
-		// UNSUPPORTED: a template with no shadow tree. html/template tells
-		// a template that is empty from one never mentioned; this does not.
-		e.unsupportedBecause("a template has no shadow tree")
+		// UNSUPPORTED: a template with no shadow tree, added with
+		// AddParseTree. html/template escapes it; this does not yet.
+		if e.defined(name) {
+			e.unsupportedBecause("a template has no shadow tree")
+		}
 		return context{
 			state: stateError,
 			err:   errorf(ErrNoSuchTemplate, node, line, "no such template %q", name),

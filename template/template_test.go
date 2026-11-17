@@ -2,6 +2,7 @@ package template
 
 import (
 	"bytes"
+	"errors"
 	stdtemplate "html/template"
 	"io"
 	"os"
@@ -36,6 +37,25 @@ func executeShim(t *testing.T, src string, data any) string {
 		t.Fatal(err)
 	}
 	return sb.String()
+}
+
+// assertRefused checks that Execute of src with data returns an *Error with
+// code whose description contains phrase, and writes nothing. html/template
+// refuses these templates the same way.
+func assertRefused(t *testing.T, src string, data any, code ErrorCode, phrase string) {
+	t.Helper()
+	var sb strings.Builder
+	err := Must(New("test").Parse(src)).Execute(&sb, data)
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("Execute(%q) error = %v, want *Error", src, err)
+	}
+	if e.ErrorCode != code || !strings.Contains(e.Description, phrase) {
+		t.Errorf("Execute(%q) error = %d %q, want code %d and %q in the description", src, e.ErrorCode, e.Description, code, phrase)
+	}
+	if sb.Len() != 0 {
+		t.Errorf("Execute(%q) wrote %q before refusing", src, sb.String())
+	}
 }
 
 func TestNewAndParse(t *testing.T) {
@@ -558,15 +578,10 @@ func TestAttributeSyntaxMatchesStdlib(t *testing.T) {
 	}
 }
 
-// TestElementsThatChangeTheTextContextAreClosed states that the engine
-// writes the end tag of an element whose content a browser does not read
-// as HTML text, even where the source leaves it out, so that output
-// escaped as HTML text after it cannot land in a script, style or raw
-// text context. html/template refuses the templates whose end context is
-// script, style or RCDATA; for the other raw text elements it reads what
-// follows as HTML text, so the engine's output differs from html/template's
-// only by the end tag.
-func TestElementsThatChangeTheTextContextAreClosed(t *testing.T) {
+// TestRawTextElementEndContext states that Execute refuses a template whose
+// output ends in script, style, textarea or title, as html/template does, and
+// that the other raw text elements execute as html/template executes them.
+func TestRawTextElementEndContext(t *testing.T) {
 	const data = `alert(1)</x><b>'`
 	for _, tt := range []struct {
 		element      string
@@ -592,18 +607,14 @@ func TestElementsThatChangeTheTextContextAreClosed(t *testing.T) {
 			if tt.stdlibRefuse != (err != nil) {
 				t.Errorf("stdlib Execute(%q) error = %v, want refused %v", src, err, tt.stdlibRefuse)
 			}
-			got := executeShim(t, src, data)
-			if !tt.stdlibRefuse {
-				// The escaper's output, which is stdlib's: no end tag is added.
-				if want := stdlib.String(); got != want {
-					t.Errorf("shim output for %q = %q, want stdlib's, %q", src, got, want)
-				}
+			if tt.stdlibRefuse {
+				assertRefused(t, src, data, ErrEndContext, "ends in a non-text context")
 				continue
 			}
-			end := "</" + tt.element + ">"
-			escaped := HTMLEscapeString(data)
-			if !strings.HasPrefix(got, "<"+tt.element+">"+end) || !strings.Contains(got, escaped) {
-				t.Errorf("shim output for %q = %q, want the end tag %s, then the data escaped as HTML text %q", src, got, end, escaped)
+			got := executeShim(t, src, data)
+			// The escaper's output, which is stdlib's: no end tag is added.
+			if want := stdlib.String(); got != want {
+				t.Errorf("shim output for %q = %q, want stdlib's, %q", src, got, want)
 			}
 		}
 	}
@@ -648,15 +659,12 @@ func TestActionsInAttributeControlStructuresAreEscaped(t *testing.T) {
 			}
 		}
 	}
-	for _, src := range []string{
-		`<a title="{{if .X}}{{template "s"}}{{end}}">x</a>{{define "s"}}" onmouseover="alert(1){{end}}`,
-		`<a title="{{with .X}}{{template "s"}}{{end}}">x</a>{{define "s"}}<b title="y">{{end}}`,
-	} {
-		got := executeShim(t, src, data{X: true})
-		if strings.Contains(got, `onmouseover="`) || strings.Contains(got, `title="y"`) {
-			t.Errorf("shim output for %q = %q: the called template ends the attribute", src, got)
-		}
-	}
+	// html/template refuses both: the first branch ends in another context,
+	// and the called template ends the attribute.
+	assertRefused(t, `<a title="{{if .X}}{{template "s"}}{{end}}">x</a>{{define "s"}}" onmouseover="alert(1){{end}}`,
+		data{X: true}, ErrBranchEnd, "branches end in different contexts")
+	assertRefused(t, `<a title="{{with .X}}{{template "s"}}{{end}}">x</a>{{define "s"}}<b title="y">{{end}}`,
+		data{X: true}, ErrBadHTML, "in attribute name")
 }
 
 // isStdlibType reports whether v is a plain string or one of

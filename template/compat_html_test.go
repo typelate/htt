@@ -3,14 +3,18 @@
 // license that can be found in the LICENSE file.
 
 // The data and the table in TestCompatHTMLEscape are copied from the
-// TestEscape function in html/template/escape_test.go of Go go1.27.3. Each
-// case runs through html/template as the oracle and through
+// TestEscape function in html/template/escape_test.go of Go go1.27.3. The
+// table in TestCompatHTMLErrors is copied from TestErrors in the same file.
+// Each case runs through html/template as the oracle and through
 // github.com/typelate/htt/template as the subject.
 
 package template_test
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	htmltemplate "html/template"
 	"strings"
 	"testing"
@@ -856,3 +860,388 @@ func httHTML(name, input string, data any) (out string, failed bool) {
 // escapeDivergences names the cases that still differ from html/template.
 // It is empty: every case matches.
 var escapeDivergences = map[string]string{}
+
+// TestCompatHTMLErrors runs each input of TestErrors through html/template
+// and through github.com/typelate/htt/template. Both must fail at the same
+// step, with the same error code and description, and the subject must write
+// nothing. The error strings must match too, except for the cases listed in
+// errorDivergences.
+func TestCompatHTMLErrors(t *testing.T) {
+	tests := []struct {
+		input string
+		err   string
+	}{
+		// Non-error cases.
+		{
+			"{{if .Cond}}<a>{{else}}<b>{{end}}",
+			"",
+		},
+		{
+			"{{if .Cond}}<a>{{end}}",
+			"",
+		},
+		{
+			"{{if .Cond}}{{else}}<b>{{end}}",
+			"",
+		},
+		{
+			"{{with .Cond}}<div>{{end}}",
+			"",
+		},
+		{
+			"{{range .Items}}<a>{{end}}",
+			"",
+		},
+		{
+			"<a href='/foo?{{range .Items}}&{{.K}}={{.V}}{{end}}'>",
+			"",
+		},
+		{
+			"{{range .Items}}<a{{if .X}}{{end}}>{{end}}",
+			"",
+		},
+		{
+			"{{range .Items}}<a{{if .X}}{{end}}>{{continue}}{{end}}",
+			"",
+		},
+		{
+			"{{range .Items}}<a{{if .X}}{{end}}>{{break}}{{end}}",
+			"",
+		},
+		{
+			"{{range .Items}}<a{{if .X}}{{end}}>{{if .X}}{{break}}{{end}}{{end}}",
+			"",
+		},
+		{
+			"<script>var a = `${a+b}`</script>`",
+			"",
+		},
+		{
+			"<script>var tmpl = `asd`;</script>",
+			``,
+		},
+		{
+			"<script>var tmpl = `${1}`;</script>",
+			``,
+		},
+		{
+			"<script>var tmpl = `${return ``}`;</script>",
+			``,
+		},
+		{
+			"<script>var tmpl = `${return {{.}} }`;</script>",
+			``,
+		},
+		{
+			"<script>var tmpl = `${ let a = {1:1} {{.}} }`;</script>",
+			``,
+		},
+		{
+			"<script>var tmpl = `asd ${return \"{\"}`;</script>",
+			``,
+		},
+		{
+			`{{if eq "" ""}}<meta>{{end}}`,
+			``,
+		},
+		{
+			`{{if eq "" ""}}<meta content="url={{"asd"}}">{{end}}`,
+			``,
+		},
+
+		// Error cases.
+		{
+			"{{if .Cond}}<a{{end}}",
+			"z:1:5: {{if}} branches",
+		},
+		{
+			"{{if .Cond}}\n{{else}}\n<a{{end}}",
+			"z:1:5: {{if}} branches",
+		},
+		{
+			// Missing quote in the else branch.
+			`{{if .Cond}}<a href="foo">{{else}}<a href="bar>{{end}}`,
+			"z:1:5: {{if}} branches",
+		},
+		{
+			// Different kind of attribute: href implies a URL.
+			"<a {{if .Cond}}href='{{else}}title='{{end}}{{.X}}'>",
+			"z:1:8: {{if}} branches",
+		},
+		{
+			"\n{{with .X}}<a{{end}}",
+			"z:2:7: {{with}} branches",
+		},
+		{
+			"\n{{with .X}}<a>{{else}}<a{{end}}",
+			"z:2:7: {{with}} branches",
+		},
+		{
+			"{{range .Items}}<a{{end}}",
+			`z:1: on range loop re-entry: "<" in attribute name: "<a"`,
+		},
+		{
+			"\n{{range .Items}} x='<a{{end}}",
+			"z:2:8: on range loop re-entry: {{range}} branches",
+		},
+		{
+			"{{range .Items}}<a{{if .X}}{{break}}{{end}}>{{end}}",
+			"z:1:29: at range loop break: {{range}} branches end in different contexts",
+		},
+		{
+			"{{range .Items}}<a{{if .X}}{{continue}}{{end}}>{{end}}",
+			"z:1:29: at range loop continue: {{range}} branches end in different contexts",
+		},
+		{
+			"{{range .Items}}{{if .X}}{{break}}{{end}}<a{{if .Y}}{{continue}}{{end}}>{{if .Z}}{{continue}}{{end}}{{end}}",
+			"z:1:54: at range loop continue: {{range}} branches end in different contexts",
+		},
+		{
+			"<a b=1 c={{.H}}",
+			"z: ends in a non-text context: {stateAttr delimSpaceOrTagEnd",
+		},
+		{
+			"<script>foo();",
+			"z: ends in a non-text context: {stateJS",
+		},
+		{
+			`<a href="{{if .F}}/foo?a={{else}}/bar/{{end}}{{.H}}">`,
+			"z:1:47: {{.H}} appears in an ambiguous context within a URL",
+		},
+		{
+			`<a onclick="alert('Hello \`,
+			`unfinished escape sequence in JS string: "Hello \\"`,
+		},
+		{
+			`<a onclick='alert("Hello\, World\`,
+			`unfinished escape sequence in JS string: "Hello\\, World\\"`,
+		},
+		{
+			`<a onclick='alert(/x+\`,
+			`unfinished escape sequence in JS string: "x+\\"`,
+		},
+		{
+			`<a onclick="/foo[\]/`,
+			`unfinished JS regexp charset: "foo[\\]/"`,
+		},
+		{
+			// It is ambiguous whether 1.5 should be 1\.5 or 1.5.
+			// Either `var x = 1/- 1.5 /i.test(x)`
+			// where `i.test(x)` is a method call of reference i,
+			// or `/-1\.5/i.test(x)` which is a method call on a
+			// case insensitive regular expression.
+			`<script>{{if false}}var x = 1{{end}}/-{{"1.5"}}/i.test(x)</script>`,
+			`'/' could start a division or regexp: "/-"`,
+		},
+		{
+			`{{template "foo"}}`,
+			"z:1:11: no such template \"foo\"",
+		},
+		{
+			`<div{{template "y"}}>` +
+				// Illegal starting in stateTag but not in stateText.
+				`{{define "y"}} foo<b{{end}}`,
+			`"<" in attribute name: " foo<b"`,
+		},
+		{
+			`<script>reverseList = [{{template "t"}}]</script>` +
+				// Missing " after recursive call.
+				`{{define "t"}}{{if .Tail}}{{template "t" .Tail}}{{end}}{{.Head}}",{{end}}`,
+			`: cannot compute output context for template t$htmltemplate_stateJS_elementScript`,
+		},
+		{
+			`<input type=button value=onclick=>`,
+			`html/template:z: "=" in unquoted attr: "onclick="`,
+		},
+		{
+			`<input type=button value= onclick=>`,
+			`html/template:z: "=" in unquoted attr: "onclick="`,
+		},
+		{
+			`<input type=button value= 1+1=2>`,
+			`html/template:z: "=" in unquoted attr: "1+1=2"`,
+		},
+		{
+			"<a class=`foo>",
+			"html/template:z: \"`\" in unquoted attr: \"`foo\"",
+		},
+		{
+			`<a style=font:'Arial'>`,
+			`html/template:z: "'" in unquoted attr: "font:'Arial'"`,
+		},
+		{
+			`<a=foo>`,
+			`: expected space, attr name, or end of tag, but got "=foo>"`,
+		},
+		{
+			`Hello, {{. | urlquery | print}}!`,
+			// urlquery is disallowed if it is not the last command in the pipeline.
+			`predefined escaper "urlquery" disallowed in template`,
+		},
+		{
+			`Hello, {{. | html | print}}!`,
+			// html is disallowed if it is not the last command in the pipeline.
+			`predefined escaper "html" disallowed in template`,
+		},
+		{
+			`Hello, {{html . | print}}!`,
+			// A direct call to html is disallowed if it is not the last command in the pipeline.
+			`predefined escaper "html" disallowed in template`,
+		},
+		{
+			`<div class={{. | html}}>Hello<div>`,
+			// html is disallowed in a pipeline that is in an unquoted attribute context,
+			// even if it is the last command in the pipeline.
+			`predefined escaper "html" disallowed in template`,
+		},
+		{
+			`Hello, {{. | urlquery | html}}!`,
+			// html is allowed since it is the last command in the pipeline, but urlquery is not.
+			`predefined escaper "urlquery" disallowed in template`,
+		},
+		{
+			"<script>var a = `{{if .X}}`{{end}}",
+			`{{if}} branches end in different contexts`,
+		},
+		{
+			"<script>var a = `{{if .X}}a{{else}}`{{end}}",
+			`{{if}} branches end in different contexts`,
+		},
+		{
+			"<script>var a = `{{if .X}}a{{else}}b{{end}}`</script>",
+			``,
+		},
+	}
+
+	seen := make(map[string]bool)
+	for _, test := range tests {
+		seen[test.input] = true
+		t.Run(test.input, func(t *testing.T) {
+			want := stdErrorRun(test.input)
+			if got := errorString(want.err); !strings.Contains(got, test.err) {
+				t.Fatalf("html/template error %q does not contain %q; the table is out of date", got, test.err)
+			}
+			got := httErrorRun(test.input)
+			problem, position := compareErrorRuns(want, got)
+			reason, listed := errorDivergences[test.input]
+			switch {
+			case problem != "":
+				t.Error(problem)
+				if listed {
+					t.Errorf("listed in errorDivergences (%s) but differs beyond the error position; fix it instead", reason)
+				}
+			case position && !listed:
+				t.Errorf("error\n\t%q\nhtml/template\n\t%q", errorString(got.err), errorString(want.err))
+			case !position && listed:
+				t.Errorf("no longer diverges (%s); remove it from errorDivergences", reason)
+			}
+		})
+	}
+	for name := range errorDivergences {
+		if !seen[name] {
+			t.Errorf("errorDivergences names unknown case %q", name)
+		}
+	}
+}
+
+// errorRun is what one run of an input came to.
+type errorRun struct {
+	// step is "Parse" or "Execute" where the run failed, or "" when neither did.
+	step string
+	err  error
+	// wrote is the number of bytes Execute wrote.
+	wrote int
+}
+
+// stdErrorRun parses input with html/template and executes it with nil data.
+func stdErrorRun(input string) errorRun {
+	tmpl, err := htmltemplate.New("z").Parse(input)
+	if err != nil {
+		return errorRun{step: "Parse", err: err}
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, nil); err != nil {
+		return errorRun{step: "Execute", err: err, wrote: buf.Len()}
+	}
+	return errorRun{}
+}
+
+// httErrorRun parses input with github.com/typelate/htt/template and executes
+// it with nil data.
+func httErrorRun(input string) errorRun {
+	tmpl, err := template.New("z").Parse(input)
+	if err != nil {
+		return errorRun{step: "Parse", err: err}
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, nil); err != nil {
+		return errorRun{step: "Execute", err: err, wrote: buf.Len()}
+	}
+	return errorRun{}
+}
+
+// compareErrorRuns returns what makes got differ from want, or "" when it
+// does not. position is true when only the error strings differ.
+func compareErrorRuns(want, got errorRun) (problem string, position bool) {
+	if got.step != want.step {
+		return fmt.Sprintf("fails at %q, html/template fails at %q", got.step, want.step), false
+	}
+	if want.step == "" {
+		return "", false
+	}
+	if want.step == "Execute" {
+		var wantErr *htmltemplate.Error
+		if errors.As(want.err, &wantErr) {
+			var gotErr *template.Error
+			if !errors.As(got.err, &gotErr) {
+				return fmt.Sprintf("Execute error is %T, want *template.Error", got.err), false
+			}
+			if int(gotErr.ErrorCode) != int(wantErr.ErrorCode) || gotErr.Description != wantErr.Description {
+				return fmt.Sprintf("error code %d %q, html/template has %d %q",
+					int(gotErr.ErrorCode), gotErr.Description, int(wantErr.ErrorCode), wantErr.Description), false
+			}
+		}
+		if got.wrote != 0 {
+			return fmt.Sprintf("Execute wrote %d bytes before failing", got.wrote), false
+		}
+	}
+	return "", errorString(got.err) != errorString(want.err)
+}
+
+// errorString returns err.Error(), or "" for nil.
+func errorString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+// causeErrorPosition is the cause of a difference in the error string alone:
+// html/template prefixes the location of the node (z:1:11:), and this package
+// does not yet.
+const causeErrorPosition = "same error, the location prefix differs"
+
+// errorDivergences names the TestCompatHTMLErrors cases whose error strings
+// differ from html/template's, with the cause.
+var errorDivergences = map[string]string{
+	"{{if .Cond}}<a{{end}}":                                  causeErrorPosition,
+	"{{if .Cond}}\n{{else}}\n<a{{end}}":                      causeErrorPosition,
+	`{{if .Cond}}<a href="foo">{{else}}<a href="bar>{{end}}`: causeErrorPosition,
+	"<a {{if .Cond}}href='{{else}}title='{{end}}{{.X}}'>":    causeErrorPosition,
+	"\n{{with .X}}<a{{end}}":                                 causeErrorPosition,
+	"\n{{with .X}}<a>{{else}}<a{{end}}":                      causeErrorPosition,
+	"\n{{range .Items}} x='<a{{end}}":                        causeErrorPosition,
+	"{{range .Items}}<a{{if .X}}{{break}}{{end}}>{{end}}":    causeErrorPosition,
+	"{{range .Items}}<a{{if .X}}{{continue}}{{end}}>{{end}}": causeErrorPosition,
+	"{{range .Items}}{{if .X}}{{break}}{{end}}<a{{if .Y}}{{continue}}{{end}}>{{if .Z}}{{continue}}{{end}}{{end}}": causeErrorPosition,
+	`<a href="{{if .F}}/foo?a={{else}}/bar/{{end}}{{.H}}">`:                                                       causeErrorPosition,
+	`{{template "foo"}}`: causeErrorPosition,
+	`<script>reverseList = [{{template "t"}}]</script>{{define "t"}}{{if .Tail}}{{template "t" .Tail}}{{end}}{{.Head}}",{{end}}`: causeErrorPosition,
+	`Hello, {{. | urlquery | print}}!`:            causeErrorPosition,
+	`Hello, {{. | html | print}}!`:                causeErrorPosition,
+	`Hello, {{html . | print}}!`:                  causeErrorPosition,
+	`<div class={{. | html}}>Hello<div>`:          causeErrorPosition,
+	`Hello, {{. | urlquery | html}}!`:             causeErrorPosition,
+	"<script>var a = `{{if .X}}`{{end}}":          causeErrorPosition,
+	"<script>var a = `{{if .X}}a{{else}}`{{end}}": causeErrorPosition,
+}

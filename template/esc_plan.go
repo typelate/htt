@@ -216,13 +216,13 @@ type escapeResult struct {
 
 // escapeTemplate returns the plan to run the named template as the shadow
 // trees in trees, or errUnsupported. The result is computed once per name.
-func (s *escapeSet) escapeTemplate(trees map[string]*htt.Tree, name string) (*escapePlan, error) {
+func (s *escapeSet) escapeTemplate(trees map[string]*htt.Tree, defined func(string) bool, name string) (*escapePlan, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if r, ok := s.results[name]; ok {
 		return r.plan, r.err
 	}
-	plan, err := escapeTemplate(trees, name)
+	plan, err := escapeTemplate(trees, defined, name)
 	if s.results == nil {
 		s.results = make(map[string]escapeResult)
 	}

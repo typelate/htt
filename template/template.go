@@ -321,7 +321,11 @@ func (t *Template) execute(wr io.Writer, name string, data any) error {
 	if processCover != nil {
 		return processCover.execute(wr, tmpl.Tree, data, opts)
 	}
-	plan, err := t.common.esc.escapeTemplate(t.common.shadow, name)
+	defined := func(n string) bool {
+		tmpl := t.common.tmpl[n]
+		return tmpl != nil && tmpl.Tree != nil
+	}
+	plan, err := t.common.esc.escapeTemplate(t.common.shadow, defined, name)
 	if err == nil {
 		return htt.ExecuteTemplate(wr, t.common.shadow[name], data, t.shadowOptions(plan, name)...)
 	}
