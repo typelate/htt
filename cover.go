@@ -266,7 +266,9 @@ func coverWalkElement(tree *Tree, blocks []coverBlock, elem *HTMLElementNode) []
 			blocks = coverWalkNode(tree, child, blocks)
 		}
 		// Close tag </tag>
-		blocks = appendBlock(tree, blocks, elem.EndTagStart, elem.end, &elem.closeCount)
+		if elem.Closed {
+			blocks = appendBlock(tree, blocks, elem.EndTagStart, elem.end, &elem.closeCount)
+		}
 	}
 	return blocks
 }
