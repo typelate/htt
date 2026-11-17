@@ -59,6 +59,77 @@ func executeStd(input string, data any) (string, error) {
 	return b.String(), nil
 }
 
+type nilInterfaceHolder struct {
+	I namedThing
+	P *namedThing
+	M map[string]namedThing
+}
+
+// TestMethodOnNilInterfaceFails: a method call on a nil interface value is
+// an execution error that names the field, not a panic.
+func TestMethodOnNilInterfaceFails(t *testing.T) {
+	var nilThing namedThing
+	data := &nilInterfaceHolder{P: &nilThing, M: map[string]namedThing{"k": nil}}
+	tests := []struct {
+		name    string
+		mode    string
+		tmpl    string
+		wantErr bool
+	}{
+		{name: "field", mode: "text", tmpl: "{{.I.Name}}", wantErr: true},
+		{name: "pointer to interface", mode: "text", tmpl: "{{.P.Name}}", wantErr: true},
+		{name: "with arguments", mode: "text", tmpl: "{{.I.Name 1}}", wantErr: true},
+		{name: "map element", mode: "text", tmpl: "{{.M.k.Name}}", wantErr: true},
+		{name: "variable", mode: "text", tmpl: "{{$x := .I}}{{$x.Name}}", wantErr: true},
+		{name: "html field", mode: "html", tmpl: "<p>{{.I.Name}}</p>", wantErr: true},
+		{name: "with guards nil", mode: "text", tmpl: "{{with .I}}{{.Name}}{{end}}", wantErr: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if !tc.wantErr {
+				var std string
+				var err error
+				if tc.mode == "html" {
+					std, err = stdHTML(tc.tmpl, data)
+				} else {
+					std, err = stdTextString(tc.tmpl, data)
+				}
+				if err != nil || std != "" {
+					t.Fatalf("std(%q) = %q, %v; want empty output and no error", tc.tmpl, std, err)
+				}
+				var got string
+				if tc.mode == "html" {
+					got = execHTML(t, tc.name, tc.tmpl, data)
+				} else {
+					got = execText(t, tc.name, tc.tmpl, data)
+				}
+				if got != "" {
+					t.Errorf("htt(%q) = %q, want empty output", tc.tmpl, got)
+				}
+				return
+			}
+			var stdErr error
+			if tc.mode == "html" {
+				_, stdErr = stdHTML(tc.tmpl, data)
+			} else {
+				_, stdErr = stdTextString(tc.tmpl, data)
+			}
+			if stdErr == nil || !strings.Contains(stdErr.Error(), "nil pointer evaluating") {
+				t.Fatalf("std(%q) error = %v, want nil pointer evaluating", tc.tmpl, stdErr)
+			}
+			var gotErr error
+			if tc.mode == "html" {
+				gotErr = execHTMLErr(t, tc.name, tc.tmpl, data)
+			} else {
+				gotErr = execTextErr(t, tc.name, tc.tmpl, data)
+			}
+			if gotErr == nil || !strings.Contains(gotErr.Error(), "nil pointer evaluating") {
+				t.Errorf("htt(%q) error = %v, want nil pointer evaluating", tc.tmpl, gotErr)
+			}
+		})
+	}
+}
+
 func executeHTT(input string, data any) (string, error) {
 	set, err := htt.NewText[any]("nil").Parse(input)
 	if err != nil {

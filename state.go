@@ -594,7 +594,11 @@ func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, fina
 		return reflect.Value{}, nil
 	}
 	typ := receiver.Type()
-	receiver = indirectInterface(receiver)
+	receiver, isNil := indirect(receiver)
+	// A method call on a nil interface would panic in MethodByName.
+	if receiver.Kind() == reflect.Interface && isNil {
+		return missingVal, s.errorf("nil pointer evaluating field %s in type %s", fieldName, typ)
+	}
 	hasArgs := len(args) > 1 || final.IsValid()
 
 	// Try methods first (on the pointer receiver too).
