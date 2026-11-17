@@ -11,9 +11,14 @@
 # modules of their own, outside any workspace.
 #
 # muxt's overlay tests need a GOROOT outside the module cache, as the
-# pipeline's image has. Where the go command runs a downloaded toolchain
-# they fail whatever htt is.
+# pipeline's image has. Where the go command on PATH is a downloaded
+# toolchain they fail whatever htt is; on such a machine run with an
+# installed Go first on PATH and GOTOOLCHAIN=local.
 set -eu
+
+# This muxt test asserts that the engine note names a released htt, and
+# here htt is a directory replacement, so it cannot pass.
+skip='^TestTemplateCoverageRunsTheEngineOverlay$'
 
 htt="$(cd "$(dirname "$0")/.." && pwd)"
 muxt="$(cd "${1:?usage: ci/downstream.sh path/to/muxt [go test flags]}" && pwd)"
@@ -33,4 +38,4 @@ export GOBIN="$work/bin"
 PATH="$GOBIN:$PATH"
 go install ./cmd/muxt
 
-go test -shuffle=on -timeout 30m "$@" ./...
+go test -shuffle=on -timeout 30m -skip "$skip" "$@" ./...
