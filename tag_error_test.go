@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/htt/template"
+	"github.com/typelate/htt"
 )
 
 // A tag with an action in an attribute name is written as text, and the
@@ -40,9 +40,11 @@ func TestErrorsInATagWrittenAsText(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl, err := template.New("page").Parse(tt.text)
+			set, err := htt.New[any]("page").Parse(tt.text)
 			require.NoError(t, err)
-			err = tmpl.Execute(new(bytes.Buffer), map[string]string{"K": "k", "V": "v"})
+			tree, ok := set.FindTree("page")
+			require.True(t, ok, "no tree named page")
+			err = htt.ExecuteTemplate(new(bytes.Buffer), tree, map[string]string{"K": "k", "V": "v"}, htt.WithFinder(set))
 			require.EqualError(t, err, tt.want, "Execute(%q)", tt.text)
 		})
 	}

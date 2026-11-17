@@ -73,6 +73,7 @@ func TestElementTextMatchesHTMLTemplate(t *testing.T) {
 		{name: "html after a printf", src: `<p>{{printf "%s" . | html}}</p>`, data: `<a&b+c d>`},
 		{name: "html in a pipeline", src: `<p>{{. | html}}</p>`, data: `<+`},
 		{name: "action in a script", src: `<script>var x = {{.}};</script>`, data: "a<+"},
+		{name: "call from an attribute", src: `{{define "u"}}{{.}}{{end}}<a title="{{template "u" .}}">`, data: "+"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			want := runHTMLTemplate(t, tt.src, tt.data)
@@ -83,23 +84,6 @@ func TestElementTextMatchesHTMLTemplate(t *testing.T) {
 			got := runHTT(t, tt.src, data)
 			if got != want {
 				t.Errorf("htt/template.Execute(%q, %#v) = %q, want %q", tt.src, data, got, want)
-			}
-		})
-	}
-}
-
-func TestOldEngineStillRunsWhereTheEscaperIsNotUsed(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		src  string
-		data any
-		want string
-	}{
-		{name: "call from an attribute", src: `{{define "u"}}{{.}}{{end}}<a title="{{template "u" .}}">`, data: `+`, want: `<a title="">`},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := runHTT(t, tt.src, tt.data); got != tt.want {
-				t.Errorf("htt/template.Execute(%q, %#v) = %q, want %q", tt.src, tt.data, got, tt.want)
 			}
 		})
 	}

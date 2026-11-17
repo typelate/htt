@@ -26,6 +26,7 @@ type planKey struct {
 type escapePlan struct {
 	actions map[planKey]htt.ActionEdit
 	texts   map[planKey][]byte
+	calls   map[planKey]string
 }
 
 // Text returns the text the escaper rewrote n to, already trimmed.
@@ -40,14 +41,14 @@ func (p *escapePlan) Action(instance string, n *htt.ActionNode) (htt.ActionEdit,
 	return edit, ok
 }
 
-// Call names no instance: no call is planned yet.
-func (p *escapePlan) Call(string, htt.Node) string {
-	return ""
+// Call returns the instance the call n runs as in instance.
+func (p *escapePlan) Call(instance string, n htt.Node) string {
+	return p.calls[planKey{instance, n}]
 }
 
 // commit makes the plan of the edits e recorded.
 func (e *escaper) commit() *escapePlan {
-	p := &escapePlan{actions: make(map[planKey]htt.ActionEdit, len(e.actionNodeEdits)), texts: e.textNodeEdits}
+	p := &escapePlan{actions: make(map[planKey]htt.ActionEdit, len(e.actionNodeEdits)), texts: e.textNodeEdits, calls: e.callEdits}
 	for k, escapers := range e.actionNodeEdits {
 		p.actions[k] = planPipeline(k.node.(*htt.ActionNode).Pipe, escapers)
 	}

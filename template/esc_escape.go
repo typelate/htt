@@ -67,12 +67,14 @@ type escaper struct {
 	// actionNodeEdits are the accumulated edits to apply during commit.
 	// Such edits are not applied immediately in case a template set
 	// executes a given template in different escaping contexts.
-	// Changed: keyed by instance and node; derived and the template node
-	// edits are not needed yet.
+	// Changed: keyed by instance and node; derived edits are not needed yet.
 	actionNodeEdits map[planKey][]string
 	// textNodeEdits are the text that replaces a text node, by instance and
 	// node, for the escaper's text the escaper rewrote. Changed: new.
 	textNodeEdits map[planKey][]byte
+	// callEdits are the instances a call runs as, by the calling instance and
+	// the call node. Changed: new.
+	callEdits map[planKey]string
 	// rangeContext holds context about the current range loop.
 	rangeContext *rangeContext
 	// unsupported says why the plan cannot be used yet, or is empty. Changed: new.
@@ -94,6 +96,7 @@ func makeEscaper(trees map[string]*htt.Tree) escaper {
 		called:          map[string]bool{},
 		actionNodeEdits: map[planKey][]string{},
 		textNodeEdits:   map[planKey][]byte{},
+		callEdits:       map[planKey]string{},
 	}
 }
 
@@ -120,7 +123,7 @@ func (e *escaper) escape(c context, n htt.Node) context {
 	case *htt.ActionNode:
 		return e.escapeAction(c, n)
 	case *htt.BlockNode:
-		return e.escapeTemplate(c, n.Call())
+		return e.escapeTemplate(c, n.Call(), n)
 	case *htt.BreakNode:
 		c.n = n
 		e.rangeContext.breaks = append(e.rangeContext.breaks, c)
@@ -140,7 +143,7 @@ func (e *escaper) escape(c context, n htt.Node) context {
 	case *htt.RangeNode:
 		return e.escapeBranch(c, n, &n.BranchNode, "range")
 	case *htt.TemplateNode:
-		return e.escapeTemplate(c, n)
+		return e.escapeTemplate(c, n, n)
 	case *htt.WithNode:
 		return e.escapeBranch(c, n, &n.BranchNode, "with")
 	}
@@ -459,6 +462,9 @@ func (e *escaper) escapeListConditionally(c context, n *htt.ListNode, trimFirst,
 		for k, v := range e1.textNodeEdits {
 			e.editTextNode(k, v)
 		}
+		for k, v := range e1.callEdits {
+			e.editCall(k, v)
+		}
 		if e1.unsupported != "" {
 			e.unsupportedBecause(e1.unsupported)
 		}
@@ -466,14 +472,12 @@ func (e *escaper) escapeListConditionally(c context, n *htt.ListNode, trimFirst,
 	return c, ok
 }
 
-// escapeTemplate escapes a {{template}} call node.
-func (e *escaper) escapeTemplate(c context, n *htt.TemplateNode) context {
+// escapeTemplate escapes a {{template}} call node. call is the node the
+// executor passes to Plan.Call: n itself, or the block that n is the call of.
+// Changed: the instance the call runs as is recorded for Plan.Call.
+func (e *escaper) escapeTemplate(c context, n *htt.TemplateNode, call htt.Node) context {
 	c, name := e.escapeTree(c, n, n.Name, n.Line)
-	if name != n.Name {
-		// UNSUPPORTED: a call outside element text runs a callee as another
-		// instance, which Plan.Call names.
-		e.unsupportedBecause("a template is called outside element text")
-	}
+	e.editCall(planKey{e.instance, call}, name)
 	return c
 }
 
@@ -746,6 +750,14 @@ func (e *escaper) editActionNode(k planKey, cmds []string) {
 		panic(fmt.Sprintf("node %s shared between templates", k.node))
 	}
 	e.actionNodeEdits[k] = cmds
+}
+
+// editCall records the instance a call runs as for later commit. Changed: new.
+func (e *escaper) editCall(k planKey, instance string) {
+	if _, ok := e.callEdits[k]; ok {
+		panic(fmt.Sprintf("node %s shared between templates", k.node))
+	}
+	e.callEdits[k] = instance
 }
 
 // Changed: commit is in esc_plan.go; template and arbitraryTemplate are not
