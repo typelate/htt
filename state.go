@@ -619,12 +619,9 @@ func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, fina
 	}
 	switch structReceiver.Kind() {
 	case reflect.Struct:
-		if sf, ok := structReceiver.Type().FieldByName(fieldName); ok && !sf.IsExported() {
-			return missingVal, s.errorf("%s is an unexported field of struct type %s", fieldName, typ)
-		}
-		field := structReceiver.FieldByName(fieldName)
-		if field.IsValid() {
-			return field, nil
+		field, err := s.structField(structReceiver, fieldName, typ)
+		if field.IsValid() || err != nil {
+			return field, err
 		}
 	case reflect.Map:
 		nameVal := reflect.ValueOf(fieldName)
@@ -645,6 +642,16 @@ func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, fina
 	default:
 	}
 	return missingVal, s.errorf("can't evaluate field %s in type %s", fieldName, typ)
+}
+
+// structField returns the field fieldName of the struct v. The value is
+// invalid when v has no field of that name. The error is for a field that
+// exists but is unexported: it is found and then refused, never read.
+func (s *state) structField(v reflect.Value, fieldName string, typ reflect.Type) (reflect.Value, error) {
+	if sf, ok := v.Type().FieldByName(fieldName); ok && !sf.IsExported() {
+		return missingVal, s.errorf("%s is an unexported field of struct type %s", fieldName, typ)
+	}
+	return v.FieldByName(fieldName), nil
 }
 
 func (s *state) evalCall(dot reflect.Value, fun reflect.Value, cmd *CommandNode, name string, args []Node, final reflect.Value) (reflect.Value, error) {
