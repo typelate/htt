@@ -429,6 +429,9 @@ func IsEmptyTree(n Node) bool {
 // It runs to EOF.
 func (t *Tree) parse() error {
 	t.Root = t.newList(0)
+	// trimNext is set when the define before the next node has a right
+	// trim marker on its end, which removes the space that follows it.
+	trimNext := false
 	for t.peek().Type != lex.TokenTypeEOF {
 		if t.peek().Type == lex.TokenTypeLeftDelim {
 			delim := t.next()
@@ -442,9 +445,14 @@ func (t *Tree) parse() error {
 				newT.ParseName = t.ParseName
 				newT.Filepath = t.Filepath
 				newT.startParse(t.scanner, t.treeSet)
-				if err := newT.parseDefinition(); err != nil {
+				endTrimRight, err := newT.parseDefinition()
+				if err != nil {
 					return err
 				}
+				if delim.TrimLeft {
+					t.trimLastText()
+				}
+				trimNext = endTrimRight
 				continue
 			}
 			t.backup2(delim)
@@ -453,6 +461,10 @@ func (t *Tree) parse() error {
 		if err != nil {
 			return err
 		}
+		if text, ok := n.(*TextNode); ok && trimNext {
+			text.Text = bytes.TrimLeft(text.Text, trimCutset)
+		}
+		trimNext = false
 		switch n.(type) {
 		case *endNode, *elseNode:
 			return t.errorf("unexpected %s", n)
@@ -464,35 +476,52 @@ func (t *Tree) parse() error {
 	return nil
 }
 
+// trimLastText removes the space at the end of the text node that ends
+// t.Root, as a {{- marker on the define that follows it does.
+func (t *Tree) trimLastText() {
+	nodes := t.Root.Nodes
+	if len(nodes) == 0 {
+		return
+	}
+	if text, ok := nodes[len(nodes)-1].(*TextNode); ok {
+		text.Text = bytes.TrimRight(text.Text, trimCutset)
+	}
+}
+
 // parseDefinition parses a {{define}} ...  {{end}} template definition and
 // installs the definition in t.treeSet. The "define" keyword has already
-// been scanned.
-func (t *Tree) parseDefinition() error {
+// been scanned. It returns the -}} marker on the definition's end, which
+// trims the space after the define.
+func (t *Tree) parseDefinition() (endTrimRight bool, err error) {
 	const context = "define clause"
 	name, err := t.expectOneOf(lex.TokenTypeString, lex.TokenTypeRawString, context)
 	if err != nil {
-		return err
+		return false, err
 	}
 	t.Name, err = strconv.Unquote(name.Value)
 	if err != nil {
-		return t.error(err)
+		return false, t.error(err)
 	}
-	if _, err := t.expect(lex.TokenTypeRightDelim, context); err != nil {
-		return err
+	rightDelim, err := t.expect(lex.TokenTypeRightDelim, context)
+	if err != nil {
+		return false, err
 	}
+	t.RootTrimFirst = rightDelim.TrimRight
 	var end Node
 	t.Root, end, err = t.itemList()
 	if err != nil {
-		return err
+		return false, err
 	}
-	if _, ok := end.(*endNode); !ok {
-		return t.errorf("unexpected %s in %s", end, context)
+	en, ok := end.(*endNode)
+	if !ok {
+		return false, t.errorf("unexpected %s in %s", end, context)
 	}
+	t.RootTrimLast = en.TrimLeft
 	if err := t.add(); err != nil {
-		return err
+		return false, err
 	}
 	t.stopParse()
-	return nil
+	return en.TrimRight, nil
 }
 
 // itemList:
