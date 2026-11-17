@@ -752,7 +752,11 @@ func (s *state) evalArg(dot reflect.Value, typ reflect.Type, n Node) (reflect.Va
 	case *BoolNode:
 		return reflect.ValueOf(arg.True), nil
 	case *NumberNode:
-		return s.idealConstant(arg)
+		v, err := s.idealConstant(arg)
+		if err != nil || typ == nil || !intLike(typ.Kind()) || v.Kind() != reflect.Int {
+			return v, err
+		}
+		return v.Convert(typ), nil
 	case *StringNode:
 		return reflect.ValueOf(arg.Text), nil
 	}
@@ -1597,6 +1601,12 @@ func (s *state) validateArg(paramType reflect.Type, arg reflect.Value) (reflect.
 			return missingVal, s.errorf("dereference of nil pointer of type %s", arg.Type())
 		}
 		arg = arg.Elem()
+	}
+	if paramType != nil && !arg.Type().AssignableTo(paramType) {
+		if arg.CanAddr() && reflect.PointerTo(arg.Type()).AssignableTo(paramType) {
+			return arg.Addr(), nil
+		}
+		return missingVal, s.errorf("wrong type for value; expected %s; got %s", paramType, arg.Type())
 	}
 	return arg, nil
 }

@@ -156,3 +156,19 @@ func TestNilInterfaceArgument(t *testing.T) {
 		{name: "nil interface field to interface", input: "{{ call .NilIface .Nil }}", data: callArgsNilData(), want: "true"},
 	})
 }
+
+func callArgsConvData() *callArgsData {
+	return &callArgsData{S: "x", V: callArgsV{N: 4}, VP: &callArgsV{N: 5}}
+}
+
+func TestArgumentConversion(t *testing.T) {
+	runCallArgsRows(t, []callArgsRow{
+		{name: "untyped int constant to uint16", input: "{{takeU16 3}}", data: callArgsConvData(), want: "3"},
+		{name: "addressable value to pointer", input: "{{takeVPtr .V}}", data: callArgsConvData(), want: "4"},
+		{name: "pointer to value", input: "{{takeV .VP}}", data: callArgsConvData(), want: "5"},
+		{name: "value and addressable value to pointer", input: "{{takeTwo .V .V}}", data: callArgsConvData(), want: "4,4"},
+		{name: "pointer to value and pointer", input: "{{takeTwo .VP .VP}}", data: callArgsConvData(), want: "5,5"},
+		{name: "string to uint16", input: "{{takeU16 .S}}", data: callArgsConvData(), wantErr: "wrong type for value; expected uint16"},
+		{name: "value that is not addressable to pointer", input: "{{takeVPtr mkV}}", data: callArgsConvData(), wantErr: "wrong type for value; expected *htt_test.callArgsV"},
+	})
+}

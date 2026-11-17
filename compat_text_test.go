@@ -934,7 +934,6 @@ const (
 	causeSlicePtr    = "slice does not accept a pointer to an array"
 	causeUnsafePtr   = "if does not accept unsafe.Pointer"
 	causePtrToIface  = "a method is not found through a pointer to an interface"
-	causeArgConv     = "call arguments are not converted: int constant to uint16, pointer to or from value"
 	causeStringer    = "String and Error are not found through an addressable value when printing"
 	causePrintPtr    = "a pointer is not dereferenced when printed or passed to html"
 )
@@ -952,9 +951,6 @@ var execDivergences = map[string]string{
 	"if UPI":                    causeUnsafePtr,
 	"if EmptyUPI":               causeUnsafePtr,
 	"bug1":                      causePtrToIface,
-	".Method2(3, .X)":           causeArgConv,
-	"bug6b":                     causeArgConv,
-	"bug6c":                     causeArgConv,
 	"V{6666}.String()":          causeStringer,
 	"W{888}.Error()":            causeStringer,
 	"empty with struct":         causePrintPtr,
