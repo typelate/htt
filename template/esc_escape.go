@@ -438,7 +438,7 @@ func (e *escaper) escapeList(c context, n *htt.ListNode, trimFirst, trimLast boo
 	}
 	for i, m := range n.Nodes {
 		if tn, ok := m.(*htt.TextNode); ok {
-			c = e.escapeText(c, tn, trimmedText(n.Nodes, i, trimFirst, trimLast))
+			c = e.escapeText(c, tn, htt.TrimmedText(n.Nodes, i, trimFirst, trimLast))
 		} else {
 			c = e.escape(c, m)
 		}
@@ -447,23 +447,6 @@ func (e *escaper) escapeList(c context, n *htt.ListNode, trimFirst, trimLast boo
 		}
 	}
 	return c
-}
-
-// trimCutset is the space a trim marker removes. Changed: new.
-const trimCutset = " \t\r\n"
-
-// trimmedText returns the text of nodes[i], a TextNode, as it is written
-// once the trim markers of its neighbors and of its list apply. It is
-// htt's walkList rule. Changed: new.
-func trimmedText(nodes []htt.Node, i int, trimFirst, trimLast bool) []byte {
-	text := nodes[i].(*htt.TextNode).Text
-	if (i == 0 && trimFirst) || (i > 0 && htt.TrimsRight(nodes[i-1])) {
-		text = bytes.TrimLeft(text, trimCutset)
-	}
-	if (i == len(nodes)-1 && trimLast) || (i < len(nodes)-1 && htt.TrimsLeft(nodes[i+1])) {
-		text = bytes.TrimRight(text, trimCutset)
-	}
-	return text
 }
 
 // escapeListConditionally escapes a list node but only preserves edits and

@@ -198,13 +198,7 @@ func (s *state) walkList(dot reflect.Value, list *ListNode, trimFirst, trimLast 
 				}
 				continue
 			}
-			text := tn.Text
-			if (i == 0 && trimFirst) || (i > 0 && TrimsRight(nodes[i-1])) {
-				text = bytes.TrimLeft(text, trimCutset)
-			}
-			if (i == len(nodes)-1 && trimLast) || (i < len(nodes)-1 && TrimsLeft(nodes[i+1])) {
-				text = bytes.TrimRight(text, trimCutset)
-			}
+			text := TrimmedText(nodes, i, trimFirst, trimLast)
 			if len(text) > 0 {
 				if _, err := s.wr.Write(text); err != nil {
 					return s.writeError(err)
@@ -220,6 +214,20 @@ func (s *state) walkList(dot reflect.Value, list *ListNode, trimFirst, trimLast 
 }
 
 const trimCutset = " \t\r\n"
+
+// TrimmedText returns the text of nodes[i], which must be a *TextNode, as the
+// executor writes it: trimFirst and trimLast say whether the list's first and
+// last nodes lose their space, and a neighbor's trim marker removes the rest.
+func TrimmedText(nodes []Node, i int, trimFirst, trimLast bool) []byte {
+	text := nodes[i].(*TextNode).Text
+	if (i == 0 && trimFirst) || (i > 0 && TrimsRight(nodes[i-1])) {
+		text = bytes.TrimLeft(text, trimCutset)
+	}
+	if (i == len(nodes)-1 && trimLast) || (i < len(nodes)-1 && TrimsLeft(nodes[i+1])) {
+		text = bytes.TrimRight(text, trimCutset)
+	}
+	return text
+}
 
 // TrimsLeft reports whether a node trims whitespace from preceding text.
 func TrimsLeft(n Node) bool {
@@ -1473,13 +1481,7 @@ func (s *state) walkHTMLNodes(dot reflect.Value, nodes []Node, trimFirst, trimLa
 	var result []*html.Node
 	for i, node := range nodes {
 		if tn, ok := node.(*TextNode); ok {
-			text := string(tn.Text)
-			if (i == 0 && trimFirst) || (i > 0 && TrimsRight(nodes[i-1])) {
-				text = strings.TrimLeft(text, trimCutset)
-			}
-			if (i == len(nodes)-1 && trimLast) || (i < len(nodes)-1 && TrimsLeft(nodes[i+1])) {
-				text = strings.TrimRight(text, trimCutset)
-			}
+			text := string(TrimmedText(nodes, i, trimFirst, trimLast))
 			tn.count.Add(1)
 			if len(text) > 0 {
 				nodeType := html.TextNode
