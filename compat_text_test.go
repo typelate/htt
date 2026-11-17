@@ -940,7 +940,6 @@ const (
 	causePtrToIface   = "a method is not found through a pointer to an interface"
 	causeArgConv      = "call arguments are not converted: int constant to uint16, pointer to or from value"
 	causeRangeIter    = "range does not accept iter.Seq or iter.Seq2"
-	causeRangeInt     = "range over a sized integer yields int values"
 	causeStringer     = "String and Error are not found through an addressable value when printing"
 	causePrintPtr     = "a pointer is not dereferenced when printed or passed to html"
 	causeHTMLNil      = "html of an invalid value prints <nil>, not <no value>"
@@ -984,16 +983,6 @@ var execDivergences = map[string]string{
 	"i,x range iter.Seq[int]":          causeRangeIter,
 	"range iter.Seq[int] else":         causeRangeIter,
 	"range iter.Seq2[int,int] else":    causeRangeIter,
-	"range int8":                       causeRangeInt,
-	"range int16":                      causeRangeInt,
-	"range int32":                      causeRangeInt,
-	"range int64":                      causeRangeInt,
-	"range uint8":                      causeRangeInt,
-	"range uint16":                     causeRangeInt,
-	"range uint32":                     causeRangeInt,
-	"range uint64":                     causeRangeInt,
-	"range uint":                       causeRangeInt,
-	"range uintptr":                    causeRangeInt,
 	"V{6666}.String()":                 causeStringer,
 	"W{888}.Error()":                   causeStringer,
 	"empty with struct":                causePrintPtr,

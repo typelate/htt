@@ -63,7 +63,7 @@ func (s *state) rangeOver(val reflect.Value, each func(index, elem reflect.Value
 			return false, nil
 		}
 		for i := int64(0); i < count; i++ {
-			stop, err := each(reflect.ValueOf(int(i)), reflect.ValueOf(int(i)))
+			stop, err := each(reflect.ValueOf(int(i)), reflect.ValueOf(i).Convert(val.Type()))
 			if err != nil {
 				return false, err
 			}
@@ -78,7 +78,7 @@ func (s *state) rangeOver(val reflect.Value, each func(index, elem reflect.Value
 			return false, nil
 		}
 		for i := uint64(0); i < count; i++ {
-			stop, err := each(reflect.ValueOf(int(i)), reflect.ValueOf(int(i)))
+			stop, err := each(reflect.ValueOf(int(i)), reflect.ValueOf(i).Convert(val.Type()))
 			if err != nil {
 				return false, err
 			}
