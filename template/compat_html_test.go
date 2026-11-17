@@ -855,8 +855,6 @@ func httHTML(name, input string, data any) (out string, failed bool) {
 
 // Reasons a case diverges. Cases with the same cause share a string.
 const (
-	causeJSValue     = "values in JS contexts are not JSON-encoded as JS expressions"
-	causeJSString    = "JS string and regexp literals are quoted differently"
 	causeCSSFilter   = "style values are not filtered as CSS (ZgotmplZ)"
 	causeCSSEncode   = "values in CSS strings and url() are not CSS- or percent-encoded"
 	causeComments    = "comments are kept and whitespace is not normalized"
@@ -867,19 +865,6 @@ const (
 // escapeDivergences maps a case name to why htt/template differs from
 // html/template.
 var escapeDivergences = map[string]string{
-	"jsNumericValue":           causeJSValue,
-	"jsBoolValue":              causeJSValue,
-	"jsNilValueTyped":          causeJSValue,
-	"jsNilValueUntyped":        causeJSValue,
-	"jsObjValue":               causeJSValue,
-	"jsObjValueNotOverEscaped": causeJSValue,
-	"badMarshaler":             causeJSValue,
-	"jsMarshaler":              causeJSValue,
-	"typed HTML in script":     causeJSValue,
-	"jsStr":                    causeJSString,
-	"jsRe":                     causeJSString,
-	"jsReBlank":                causeJSString,
-
 	"styleExpressionBlocked":           causeCSSFilter,
 	"styleObfuscatedExpressionBlocked": causeCSSFilter,
 	"styleMozBindingBlocked":           causeCSSFilter,
@@ -898,12 +883,7 @@ var escapeDivergences = map[string]string{
 	"styleStrSpecialsEncoded":          causeCSSEncode,
 	"styleURLSpecialsEncoded":          causeCSSEncode,
 
-	"JS line comment":               causeComments,
-	"JS multiline block comment":    causeComments,
-	"JS single-line block comment":  causeComments,
 	"CSS comments":                  causeComments,
-	"JS attr block comment":         causeComments,
-	"JS attr line comment":          causeComments,
 	"CSS attr block comment":        causeComments,
 	"CSS attr line comment":         causeComments,
 	"Comment ends flush with start": causeComments,

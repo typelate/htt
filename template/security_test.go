@@ -118,15 +118,15 @@ func TestTrustCSSInStyleBody(t *testing.T) {
 }
 
 func TestTrustHTMLAttrBypassesContextualEscape(t *testing.T) {
-	t.Run("HTMLAttr in href skips URL filter", func(t *testing.T) {
+	t.Run("HTMLAttr in href is still URL-filtered", func(t *testing.T) {
 		got := render(t, `<a href="{{.}}">x</a>`,
 			template.HTMLAttr(`javascript:trustedCall()`))
 		assert.Equal(t, `<a href="#ZgotmplZ">x</a>`, got)
 	})
-	t.Run("HTMLAttr in onclick skips JS-event escape", func(t *testing.T) {
+	t.Run("HTMLAttr in onclick is JS-event-escaped", func(t *testing.T) {
 		got := render(t, `<button onclick="{{.}}">x</button>`,
 			template.HTMLAttr(`callMe()`))
-		assert.Equal(t, `<button onclick="callMe()">x</button>`, got)
+		assert.Equal(t, `<button onclick="&#34;callMe()&#34;">x</button>`, got)
 	})
 }
 
@@ -206,7 +206,7 @@ func TestExtendedJSEventHandlersEscaped(t *testing.T) {
 		t.Run(attr, func(t *testing.T) {
 			tmpl := `<div ` + attr + `="{{.}}">x</div>`
 			got := render(t, tmpl, `";alert(1);//`)
-			assert.Contains(t, got, `\u0022`,
+			assert.Contains(t, got, `&#34;\&#34;;alert(1);//&#34;`,
 				"%s should be JS-event-escaped", attr)
 		})
 	}
@@ -251,7 +251,7 @@ func TestUnchangedDefaultEscaping(t *testing.T) {
 			"onclick value JS-escaped",
 			`<button onclick="{{.}}">x</button>`,
 			`alert("xss")`,
-			"<button onclick=\"&#34;alert(\\u0022xss\\u0022)&#34;\">x</button>",
+			"<button onclick=\"&#34;alert(\\&#34;xss\\&#34;)&#34;\">x</button>",
 		},
 	}
 	for _, tc := range tests {

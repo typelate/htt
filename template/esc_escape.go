@@ -248,12 +248,14 @@ func (e *escaper) escapeAction(c context, n *htt.ActionNode) context {
 	default:
 		s = append(s, "_html_template_attrescaper")
 	}
-	// UNSUPPORTED: actions in JS, CSS, srcset, meta content and comments are
-	// not planned yet.
+	// UNSUPPORTED: actions in CSS, srcset, meta content and HTML comments
+	// are not planned yet.
 	switch c.state {
-	case stateText, stateRCDATA, stateTag, stateAttrName, stateAfterName, stateBeforeValue, stateAttr, stateURL:
+	case stateText, stateRCDATA, stateTag, stateAttrName, stateAfterName, stateBeforeValue, stateAttr, stateURL,
+		stateJS, stateJSDqStr, stateJSSqStr, stateJSTmplLit, stateJSRegexp,
+		stateJSBlockCmt, stateJSLineCmt, stateJSHTMLOpenCmt, stateJSHTMLCloseCmt:
 	default:
-		e.unsupportedBecause("an action is in a JS, CSS, srcset, meta or comment context")
+		e.unsupportedBecause("an action is in a CSS, srcset, meta or HTML comment context")
 		return c
 	}
 	e.editActionNode(planKey{e.instance, n}, s)
