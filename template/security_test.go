@@ -111,8 +111,7 @@ func TestTrustCSSInStyleBody(t *testing.T) {
 		got := render(t, `<style>.theme-{{.}} { color: red; }</style>`,
 			`x } body { background: black; `)
 		assert.Contains(t, got, "<style>")
-		assert.Contains(t, got, "\\7b ", "{ should be CSS-escaped")
-		assert.Contains(t, got, "\\7d ", "} should be CSS-escaped")
+		assert.Contains(t, got, "<style>.theme-ZgotmplZ { color: red; }</style>", "untrusted CSS is filtered as html/template filters it")
 		assert.NotContains(t, got, "} body {")
 	})
 }
@@ -140,7 +139,7 @@ func TestTrustSrcsetBypassesPerURLFilter(t *testing.T) {
 	t.Run("untrusted srcset gets per-URL filtering", func(t *testing.T) {
 		got := render(t, `<img srcset="{{.}}">`,
 			`javascript:alert(1) 1x, https://x/y 2x`)
-		assert.Contains(t, got, `#ZgotmplZ 1x`)
+		assert.Contains(t, got, `#ZgotmplZ, https://x/y 2x`)
 		assert.Contains(t, got, `https://x/y 2x`)
 	})
 }
@@ -164,7 +163,7 @@ func TestCSSContextBlocksRuleBreakout(t *testing.T) {
 	got := render(t, `<style>.theme-{{.}} { color: red; }</style>`,
 		`x } body { background: black`)
 	assert.NotContains(t, got, "} body {", "rule breakout must not be possible")
-	assert.Contains(t, got, "\\7d ", "} must be CSS-hex-escaped")
+	assert.Contains(t, got, ".theme-ZgotmplZ", "untrusted CSS is filtered as html/template filters it")
 }
 
 // --- Dynamic attribute names parse as text ---
@@ -225,7 +224,7 @@ func TestNonEventOnPrefixAttributeNotEscaped(t *testing.T) {
 func TestSrcsetBlocksDangerousURLs(t *testing.T) {
 	got := render(t, `<img srcset="{{.}}">`,
 		`javascript:alert(1) 1x, https://example/x.png 2x`)
-	assert.Contains(t, got, "#ZgotmplZ 1x")
+	assert.Contains(t, got, "#ZgotmplZ, https://example/x.png 2x")
 	assert.Contains(t, got, "https://example/x.png 2x")
 }
 

@@ -853,47 +853,6 @@ func httHTML(name, input string, data any) (out string, failed bool) {
 	return b.String(), false
 }
 
-// Reasons a case diverges. Cases with the same cause share a string.
-const (
-	causeCSSFilter   = "style values are not filtered as CSS (ZgotmplZ)"
-	causeCSSEncode   = "values in CSS strings and url() are not CSS- or percent-encoded"
-	causeComments    = "comments are kept and whitespace is not normalized"
-	causeSrcset      = "srcset candidates are rewritten differently"
-	causeMetaContent = "a URL in a meta content attribute is not filtered"
-)
-
-// escapeDivergences maps a case name to why htt/template differs from
-// html/template.
-var escapeDivergences = map[string]string{
-	"styleExpressionBlocked":           causeCSSFilter,
-	"styleObfuscatedExpressionBlocked": causeCSSFilter,
-	"styleMozBindingBlocked":           causeCSSFilter,
-	"styleObfuscatedMozBindingBlocked": causeCSSFilter,
-	"styleURLBadProtocolBlocked":       causeCSSFilter,
-	"styleStrBadProtocolBlocked":       causeCSSFilter,
-
-	"styleURLQueryEncoded":             causeCSSEncode,
-	"styleQuotedURLQueryEncoded":       causeCSSEncode,
-	"styleStrQueryEncoded":             causeCSSEncode,
-	"styleStrEncodedProtocolEncoded":   causeCSSEncode,
-	"styleURLGoodProtocolPassed":       causeCSSEncode,
-	"styleStrGoodProtocolPassed":       causeCSSEncode,
-	"styleURLNotEncodedForHTMLInCdata": causeCSSEncode,
-	"styleURLMixedCase":                causeCSSEncode,
-	"styleStrSpecialsEncoded":          causeCSSEncode,
-	"styleURLSpecialsEncoded":          causeCSSEncode,
-
-	"CSS comments":                  causeComments,
-	"CSS attr block comment":        causeComments,
-	"CSS attr line comment":         causeComments,
-	"Comment ends flush with start": causeComments,
-
-	"srcset bad URL in second position": causeSrcset,
-	"srcset buffer growth":              causeSrcset,
-
-	"meta content attribute url":                            causeMetaContent,
-	"meta content url with whitespace before equals":        causeMetaContent,
-	"meta content url with tab before equals":               causeMetaContent,
-	"meta content url with space after equals":              causeMetaContent,
-	"meta content url with whitespace both sides of equals": causeMetaContent,
-}
+// escapeDivergences names the cases that still differ from html/template.
+// It is empty: every case matches.
+var escapeDivergences = map[string]string{}
