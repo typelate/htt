@@ -180,6 +180,51 @@ func TestNilInterfaceInAScriptStringIsNotNull(t *testing.T) {
 	}
 }
 
+type nilMethodData struct {
+	S   fmt.Stringer
+	E   any
+	Err error
+}
+
+// TestNilMethodInterfacePrintsNil: a nil value of an interface type with
+// methods prints as text/template prints it, which is <nil>. A nil any has no
+// methods and prints <no value>.
+func TestNilMethodInterfacePrintsNil(t *testing.T) {
+	data := nilMethodData{}
+	tests := []struct {
+		name string
+		tmpl string
+	}{
+		{"stringer field", "{{.S}}"},
+		{"any field", "{{.E}}"},
+		{"error field", "{{.Err}}"},
+		{"with guards stringer", "{{with .S}}x{{else}}y{{end}}"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			want, err := stdTextString(tc.tmpl, data)
+			if err != nil {
+				t.Fatalf("text/template execute(%q) error: %v", tc.tmpl, err)
+			}
+			got := execText(t, tc.name, tc.tmpl, data)
+			if got != want {
+				t.Errorf("htt execute(%q) = %q, want %q", tc.tmpl, got, want)
+			}
+		})
+	}
+	t.Run("html guard", func(t *testing.T) {
+		const tmpl = "<p>{{.S}}</p>"
+		want, err := stdHTML(tmpl, data)
+		if err != nil {
+			t.Fatalf("html/template execute(%q) error: %v", tmpl, err)
+		}
+		got := execHTML(t, "html guard", tmpl, data)
+		if got != want {
+			t.Errorf("htt execute(%q) = %q, want %q", tmpl, got, want)
+		}
+	})
+}
+
 func executeHTT(input string, data any) (string, error) {
 	set, err := htt.NewText[any]("nil").Parse(input)
 	if err != nil {

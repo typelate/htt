@@ -830,9 +830,13 @@ func (s *state) evalStringArg(typ reflect.Type, n *StringNode) (reflect.Value, e
 
 // printValue writes the textual representation of the value to the writer.
 func (s *state) printValue(wr io.Writer, v reflect.Value) (int, error) {
-	// A nil interface holds no value, as indirectInterface reports it.
-	if !v.IsValid() || (v.Kind() == reflect.Interface && v.IsNil()) {
+	// A nil interface with no methods holds no value. One with methods is
+	// a nil value of that type, and text/template prints it as <nil>.
+	if !v.IsValid() || (v.Kind() == reflect.Interface && v.IsNil() && v.Type().NumMethod() == 0) {
 		return wr.Write([]byte("<no value>"))
+	}
+	if v.Kind() == reflect.Interface && v.IsNil() {
+		return wr.Write([]byte("<nil>"))
 	}
 	iface := printableValue(v)
 	if iface == nil {
