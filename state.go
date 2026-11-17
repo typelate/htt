@@ -587,7 +587,10 @@ func (s *state) findFunction(name string) (reflect.Value, bool) {
 
 func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, final reflect.Value, receiver reflect.Value) (reflect.Value, error) {
 	if !receiver.IsValid() {
-		// Nil data has no field; text/template yields no value.
+		// Nil data has no field; text/template yields no value unless the key is required.
+		if s.missingKey == MissingKeyError {
+			return missingVal, s.errorf("nil data; no entry for key %q", fieldName)
+		}
 		return reflect.Value{}, nil
 	}
 	typ := receiver.Type()
