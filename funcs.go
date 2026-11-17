@@ -427,19 +427,13 @@ func doLt(k1, k2 kind, v1, v2 reflect.Value) (bool, error) {
 // prepareArg converts value to typ where it can.
 func prepareArg(value reflect.Value, typ reflect.Type) reflect.Value {
 	if !value.IsValid() {
-		if canBeNil(typ) {
-			value = reflect.Zero(typ)
-		} else {
-			value = reflect.Zero(typ)
-		}
+		return reflect.Zero(typ)
 	}
-	if value.Type().AssignableTo(typ) {
+	converted, err := prepareArgErr(value, typ)
+	if err != nil {
 		return value
 	}
-	if intLike(value.Kind()) && intLike(typ.Kind()) && value.Type().ConvertibleTo(typ) {
-		value = value.Convert(typ)
-	}
-	return value
+	return converted
 }
 
 func prepareArgErr(value reflect.Value, typ reflect.Type) (reflect.Value, error) {
