@@ -13,23 +13,46 @@ import (
 // Signature is the caller's representation of a function; the set only
 // records which names are registered.
 type Template[Signature any] struct {
-	templates             map[string]*Template[Signature] // shared across associated templates
+	shared                *common[Signature] // nil until a method stores set state
 	name                  string
 	tree                  *Tree
 	leftDelim, rightDelim string
-	functions             map[string]Signature
-	missingKey            string // "invalid", "zero", "error", or "" (default)
-	text                  bool   // a text/template set: parsed without HTML structure
-	skipFuncCheck         bool   // Parse does not check that called functions are defined
+	text                  bool // a text/template set: parsed without HTML structure
+}
+
+// common is the state that every template of a set shares, as
+// text/template's common is.
+type common[Signature any] struct {
+	templates     map[string]*Template[Signature]
+	functions     map[string]Signature
+	missingKey    string // "invalid", "zero", "error", or "" (default)
+	skipFuncCheck bool   // Parse does not check that called functions are defined
+}
+
+// state returns the set's shared state, allocating it for a zero Template.
+func (t *Template[S]) state() *common[S] {
+	if t.shared == nil {
+		t.shared = &common[S]{
+			templates: make(map[string]*Template[S]),
+			functions: make(map[string]S),
+		}
+	}
+	return t.shared
+}
+
+// read returns the set's shared state, or an empty state for a zero
+// Template, without storing it.
+func (t *Template[S]) read() common[S] {
+	if t.shared == nil {
+		return common[S]{}
+	}
+	return *t.shared
 }
 
 // New returns a set that parses in HTML mode, as html/template does.
 func New[Signature any](name string) *Template[Signature] {
-	t := &Template[Signature]{
-		name:      name,
-		functions: make(map[string]Signature),
-	}
-	t.templates = map[string]*Template[Signature]{name: t}
+	t := &Template[Signature]{name: name}
+	t.state().templates[name] = t
 	return t
 }
 
@@ -44,7 +67,7 @@ func NewText[Signature any](name string) *Template[Signature] {
 // SkipFuncCheck makes Parse accept calls of functions that are not
 // registered. It returns t.
 func (t *Template[S]) SkipFuncCheck() *Template[S] {
-	t.skipFuncCheck = true
+	t.state().skipFuncCheck = true
 	return t
 }
 
@@ -55,12 +78,13 @@ func (t *Template[S]) IsText() bool {
 
 // ParseOptions returns the lexer options Parse uses.
 func (t *Template[S]) ParseOptions() lex.Options {
-	_, hasBreak := t.functions["break"]
-	_, hasContinue := t.functions["continue"]
+	shared := t.read()
+	_, hasBreak := shared.functions["break"]
+	_, hasContinue := shared.functions["continue"]
 	var functions map[string]bool
-	if !t.skipFuncCheck {
-		functions = make(map[string]bool, len(t.functions))
-		for name := range t.functions {
+	if !shared.skipFuncCheck {
+		functions = make(map[string]bool, len(shared.functions))
+		for name := range shared.functions {
 			functions[name] = true
 		}
 	}
@@ -77,8 +101,9 @@ func (t *Template[S]) ParseOptions() lex.Options {
 
 // Names returns the sorted names of the templates in the set.
 func (t *Template[S]) Names() []string {
-	names := make([]string, 0, len(t.templates))
-	for name := range t.templates {
+	templates := t.read().templates
+	names := make([]string, 0, len(templates))
+	for name := range templates {
 		names = append(names, name)
 	}
 	slices.Sort(names)
@@ -97,11 +122,9 @@ func (t *Template[S]) Tree() *Tree {
 
 // Functions registers functions by name. It returns t.
 func (t *Template[S]) Functions(functions map[string]S) *Template[S] {
-	if t.functions == nil {
-		t.functions = make(map[string]S)
-	}
+	shared := t.state()
 	for k, v := range functions {
-		t.functions[k] = v
+		shared.functions[k] = v
 	}
 	return t
 }
@@ -109,15 +132,16 @@ func (t *Template[S]) Functions(functions map[string]S) *Template[S] {
 // Option sets options as text/template's Option does. The only option is
 // missingkey.
 func (t *Template[S]) Option(opt ...string) (*Template[S], error) {
+	shared := t.state()
 	for _, o := range opt {
 		switch {
 		case strings.HasPrefix(o, "missingkey="):
 			value := o[len("missingkey="):]
 			switch value {
 			case "invalid", "default":
-				t.missingKey = "invalid"
+				shared.missingKey = "invalid"
 			case "zero", "error":
-				t.missingKey = value
+				shared.missingKey = value
 			default:
 				return nil, fmt.Errorf("template: unknown missing key option %q", o)
 			}
@@ -138,12 +162,12 @@ func (t *Template[S]) Delimiters(left, right string) *Template[S] {
 
 // Lookup returns the template named name, or nil.
 func (t *Template[S]) Lookup(name string) *Template[S] {
-	return t.templates[name]
+	return t.read().templates[name]
 }
 
 // FindTree implements TreeFinder.
 func (t *Template[S]) FindTree(name string) (*Tree, bool) {
-	if tmpl := t.templates[name]; tmpl != nil && tmpl.tree != nil {
+	if tmpl := t.Lookup(name); tmpl != nil && tmpl.tree != nil {
 		return tmpl.tree, true
 	}
 	return nil, false
@@ -179,14 +203,17 @@ func (t *Template[S]) AddParseTree(name string, tree *Tree) (*Template[S], error
 		tree.HTMLMode = true
 		AnnotateHTMLContexts(tree.Root)
 	}
-	tmpl := t.templates[name]
+	shared := t.state()
+	tmpl := shared.templates[name]
 	if tmpl == nil {
 		tmpl = &Template[S]{
-			name:      name,
-			templates: t.templates,
-			text:      t.text,
+			name:       name,
+			shared:     shared,
+			leftDelim:  t.leftDelim,
+			rightDelim: t.rightDelim,
+			text:       t.text,
 		}
-		t.templates[name] = tmpl
+		shared.templates[name] = tmpl
 	}
 	if tmpl.tree == nil || !IsEmptyTree(tree.Root) {
 		tmpl.tree = tree
