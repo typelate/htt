@@ -855,14 +855,11 @@ func httHTML(name, input string, data any) (out string, failed bool) {
 
 // Reasons a case diverges. Cases with the same cause share a string.
 const (
-	causeURLEncode   = "URL parts are HTML-escaped, not percent-encoded"
-	causeURLPath     = "a URL path value is not filtered as html/template filters it"
 	causeJSValue     = "values in JS contexts are not JSON-encoded as JS expressions"
 	causeJSString    = "JS string and regexp literals are quoted differently"
 	causeCSSFilter   = "style values are not filtered as CSS (ZgotmplZ)"
 	causeCSSEncode   = "values in CSS strings and url() are not CSS- or percent-encoded"
 	causeComments    = "comments are kept and whitespace is not normalized"
-	causeTypedHTML   = "typed HTML values are escaped where html/template strips tags or passes them through"
 	causeSrcset      = "srcset candidates are rewritten differently"
 	causeMetaContent = "a URL in a meta content attribute is not filtered"
 )
@@ -870,14 +867,6 @@ const (
 // escapeDivergences maps a case name to why htt/template differs from
 // html/template.
 var escapeDivergences = map[string]string{
-	"constant":              causeURLEncode,
-	"nonHierURL":            causeURLEncode,
-	"urlQuery":              causeURLEncode,
-	"urlFragment":           causeURLEncode,
-	"urlBranchConflictMoot": causeURLEncode,
-	"optional attrs":        causeURLEncode,
-	"urlPath":               causeURLPath,
-
 	"jsNumericValue":           causeJSValue,
 	"jsBoolValue":              causeJSValue,
 	"jsNilValueTyped":          causeJSValue,
@@ -918,9 +907,6 @@ var escapeDivergences = map[string]string{
 	"CSS attr block comment":        causeComments,
 	"CSS attr line comment":         causeComments,
 	"Comment ends flush with start": causeComments,
-
-	"typed HTML in attribute": causeTypedHTML,
-	"typed HTML in RCDATA":    causeTypedHTML,
 
 	"srcset bad URL in second position": causeSrcset,
 	"srcset buffer growth":              causeSrcset,

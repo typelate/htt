@@ -248,9 +248,12 @@ func (e *escaper) escapeAction(c context, n *htt.ActionNode) context {
 	default:
 		s = append(s, "_html_template_attrescaper")
 	}
-	// UNSUPPORTED: only an action in element text is planned yet.
-	if c.state != stateText || c.delim != delimNone {
-		e.unsupportedBecause("an action is outside element text")
+	// UNSUPPORTED: actions in JS, CSS, srcset, meta content and comments are
+	// not planned yet.
+	switch c.state {
+	case stateText, stateRCDATA, stateTag, stateAttrName, stateAfterName, stateBeforeValue, stateAttr, stateURL:
+	default:
+		e.unsupportedBecause("an action is in a JS, CSS, srcset, meta or comment context")
 		return c
 	}
 	e.editActionNode(planKey{e.instance, n}, s)

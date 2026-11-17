@@ -57,7 +57,8 @@ func (e *escaper) commit() *escapePlan {
 // planPipeline is html/template's ensurePipelineContains as an edit: the
 // value of the pipeline is piped through the escapers, in order. A predefined
 // escaper at the end of the pipeline that is equivalent to one of them is not
-// run; a one-command pipeline with arguments hands them to the first escaper.
+// run; a one-command pipeline whose escaper is kept hands its arguments to the
+// first escaper.
 func planPipeline(p *htt.PipeNode, escapers []string) htt.ActionEdit {
 	var edit htt.ActionEdit
 	names := slices.Clone(escapers)
@@ -65,7 +66,6 @@ func planPipeline(p *htt.PipeNode, escapers []string) htt.ActionEdit {
 		last := p.Commands[n-1]
 		if id, ok := last.Args[0].(*htt.IdentifierNode); ok && predefinedEscapers[id.Ident] {
 			esc := id.Ident
-			edit.EvalArgs = n == 1 && len(last.Args) > 1
 			dup := false
 			for i, name := range names {
 				if normalizeEscFn(name) == esc {
@@ -73,6 +73,9 @@ func planPipeline(p *htt.PipeNode, escapers []string) htt.ActionEdit {
 					dup = true
 				}
 			}
+			// A lone escaper that is not dropped is called with its
+			// arguments, none for {{html}}, as html/template calls it.
+			edit.EvalArgs = n == 1 && (len(last.Args) > 1 || dup)
 			switch {
 			case dup && !edit.EvalArgs:
 				edit.Drop = 1

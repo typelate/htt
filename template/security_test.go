@@ -49,7 +49,7 @@ func TestTrustURLBypassesSchemeFilter(t *testing.T) {
 	}{
 		{
 			"trusted javascript URL passes", template.URL(`javascript:onSafeAction()`),
-			`<a href="javascript:onSafeAction()">x</a>`,
+			`<a href="javascript:onSafeAction%28%29">x</a>`,
 		},
 		{
 			"trusted custom scheme passes", template.URL(`tel:+15551234`),
@@ -121,7 +121,7 @@ func TestTrustHTMLAttrBypassesContextualEscape(t *testing.T) {
 	t.Run("HTMLAttr in href skips URL filter", func(t *testing.T) {
 		got := render(t, `<a href="{{.}}">x</a>`,
 			template.HTMLAttr(`javascript:trustedCall()`))
-		assert.Equal(t, `<a href="javascript:trustedCall()">x</a>`, got)
+		assert.Equal(t, `<a href="#ZgotmplZ">x</a>`, got)
 	})
 	t.Run("HTMLAttr in onclick skips JS-event escape", func(t *testing.T) {
 		got := render(t, `<button onclick="{{.}}">x</button>`,
