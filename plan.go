@@ -2,7 +2,6 @@ package htt
 
 import (
 	"io"
-	"reflect"
 )
 
 // Plan carries the edits an escaper makes to a text tree.
@@ -19,6 +18,8 @@ type Plan interface {
 type ActionEdit struct {
 	// Drop is the number of commands at the end of the pipeline that are not run.
 	Drop int
+	// EvalArgs passes the arguments of a one-command pipeline to Funcs' first function instead of running the command.
+	EvalArgs bool
 	// Funcs receive the value's Interface() first, then the previous result.
 	Funcs []func(args ...any) string
 }
@@ -39,16 +40,12 @@ func (s *state) replaceText(n *TextNode) ([]byte, bool) {
 	return s.plan.Text(s.instance, n)
 }
 
-// writeEdit pipes val through the functions of edit and writes the result.
-func (s *state) writeEdit(val reflect.Value, edit ActionEdit) error {
-	var arg any
-	if val.IsValid() {
-		arg = val.Interface()
-	}
+// writeEdit passes args to the first function of edit, pipes the result through the rest, and writes it.
+func (s *state) writeEdit(args []any, edit ActionEdit) error {
 	var text string
 	for i, fn := range edit.Funcs {
 		if i == 0 {
-			text = fn(arg)
+			text = fn(args...)
 		} else {
 			text = fn(text)
 		}

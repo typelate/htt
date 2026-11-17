@@ -290,6 +290,13 @@ func (s *state) walkAction(dot reflect.Value, action *ActionNode) error {
 	if s.plan != nil && len(action.Pipe.Decl) == 0 {
 		edit, edited = s.plan.Action(s.instance, action)
 	}
+	if edited && edit.EvalArgs {
+		args, err := s.evalArgs(dot, action.Pipe.Commands[0].Args[1:])
+		if err != nil {
+			return err
+		}
+		return s.writeEdit(args, edit)
+	}
 	pipe := action.Pipe
 	if edited && edit.Drop > 0 {
 		dropped := *pipe
@@ -305,12 +312,34 @@ func (s *state) walkAction(dot reflect.Value, action *ActionNode) error {
 		return nil
 	}
 	if edited {
-		return s.writeEdit(val, edit)
+		var arg any
+		if val.IsValid() {
+			arg = val.Interface()
+		}
+		return s.writeEdit([]any{arg}, edit)
 	}
 	if _, err := s.printValue(s.wr, val); err != nil {
 		return s.writeError(err)
 	}
 	return nil
+}
+
+// evalArgs evaluates the nodes as arguments of an empty interface parameter.
+func (s *state) evalArgs(dot reflect.Value, nodes []Node) ([]any, error) {
+	anyType := reflect.TypeFor[any]()
+	args := make([]any, 0, len(nodes))
+	for _, n := range nodes {
+		v, err := s.evalArg(dot, anyType, n)
+		if err != nil {
+			return nil, err
+		}
+		var arg any
+		if v.IsValid() {
+			arg = v.Interface()
+		}
+		args = append(args, arg)
+	}
+	return args, nil
 }
 
 func (s *state) walkIfNode(dot reflect.Value, n *IfNode) error {
