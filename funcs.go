@@ -11,17 +11,17 @@ func builtins() FuncMap {
 	return FuncMap{
 		"and":      and,
 		"call":     call,
-		"html":     htmlEscaper,
+		"html":     texttemplate.HTMLEscaper,
 		"index":    index,
 		"slice":    slice,
-		"js":       jsEscaper,
+		"js":       texttemplate.JSEscaper,
 		"len":      length,
 		"not":      not,
 		"or":       or,
 		"print":    fmt.Sprint,
 		"printf":   fmt.Sprintf,
 		"println":  fmt.Sprintln,
-		"urlquery": urlQueryEscaper,
+		"urlquery": texttemplate.URLQueryEscaper,
 
 		// Comparisons
 		"eq": eq,
@@ -416,20 +416,6 @@ func doLt(k1, k2 kind, v1, v2 reflect.Value) (bool, error) {
 		return v1.Uint() < v2.Uint(), nil
 	}
 	return false, fmt.Errorf("uncomparable types")
-}
-
-// HTML, JS, and URL-query escaping
-
-func htmlEscaper(args ...any) string {
-	return texttemplate.HTMLEscaper(args...)
-}
-
-func jsEscaper(args ...any) string {
-	return texttemplate.JSEscaper(args...)
-}
-
-func urlQueryEscaper(args ...any) string {
-	return texttemplate.URLQueryEscaper(args...)
 }
 
 // prepareArg converts value to typ where it can.
