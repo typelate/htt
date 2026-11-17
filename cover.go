@@ -310,7 +310,7 @@ func collapseBlocks(blocks []coverBlock) []coverBlock {
 		j := i + 1
 		for j < len(blocks) {
 			next := blocks[j]
-			if next.count != merged.count {
+			if next.count != merged.count || next.parseName != merged.parseName {
 				break
 			}
 			merged.numStmt += next.numStmt
