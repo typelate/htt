@@ -282,6 +282,16 @@ func (s *state) walkWithNode(dot reflect.Value, n *WithNode) error {
 	return s.walkBranch(dot, &n.BranchNode, "with")
 }
 
+// bodyLastTrim reports whether the body's last node trims the space after
+// it. When the else list has nodes it sits next to the body, so its {{-
+// decides; otherwise the {{- on the end does.
+func bodyLastTrim(branch *BranchNode) bool {
+	if branch.ElseList != nil && len(branch.ElseList.Nodes) > 0 {
+		return branch.ElseTrimLeft
+	}
+	return branch.EndTrimLeft
+}
+
 func (s *state) walkBranch(dot reflect.Value, branch *BranchNode, name string) error {
 	branch.openCount.Add(1)
 	mark := len(s.vars)
@@ -300,10 +310,7 @@ func (s *state) walkBranch(dot reflect.Value, branch *BranchNode, name string) e
 		if name == "with" {
 			newDot = pipe
 		}
-		lastTrim := branch.EndTrimLeft
-		if branch.ElseList != nil && len(branch.ElseList.Nodes) > 0 {
-			lastTrim = branch.ElseTrimLeft
-		}
+		lastTrim := bodyLastTrim(branch)
 		walkErr = s.walkList(newDot, branch.List, branch.StartTrimRight, lastTrim)
 	} else if branch.ElseList != nil {
 		branch.elseCount.Add(1)
@@ -327,10 +334,7 @@ func (s *state) walkRangeNode(dot reflect.Value, r *RangeNode) error {
 	mark := len(s.vars)
 	ran, err := s.rangeOver(val, func(index, elem reflect.Value) (bool, error) {
 		s.setRangeVars(r.Pipe, index, elem)
-		lastTrim := r.EndTrimLeft
-		if r.ElseList != nil && len(r.ElseList.Nodes) > 0 {
-			lastTrim = r.ElseTrimLeft
-		}
+		lastTrim := bodyLastTrim(&r.BranchNode)
 		err := s.walkList(elem, r.List, r.StartTrimRight, lastTrim)
 		s.vars = s.vars[:mark]
 		if isBreak(err) {
@@ -1203,10 +1207,7 @@ func (s *state) walkHTMLBranch(dot reflect.Value, branch *BranchNode, name strin
 		if name == "with" {
 			newDot = pipe
 		}
-		lastTrim := branch.EndTrimLeft
-		if branch.ElseList != nil && len(branch.ElseList.Nodes) > 0 {
-			lastTrim = branch.ElseTrimLeft
-		}
+		lastTrim := bodyLastTrim(branch)
 		nodes, err = s.walkHTMLList(newDot, branch.List, branch.StartTrimRight, lastTrim)
 	} else if branch.ElseList != nil {
 		branch.elseCount.Add(1)
@@ -1230,10 +1231,7 @@ func (s *state) walkHTMLRange(dot reflect.Value, r *RangeNode) ([]*html.Node, er
 	var result []*html.Node
 	ran, err := s.rangeOver(val, func(index, elem reflect.Value) (bool, error) {
 		s.setRangeVars(r.Pipe, index, elem)
-		lastTrim := r.EndTrimLeft
-		if r.ElseList != nil && len(r.ElseList.Nodes) > 0 {
-			lastTrim = r.ElseTrimLeft
-		}
+		lastTrim := bodyLastTrim(&r.BranchNode)
 		nodes, err := s.walkHTMLList(elem, r.List, r.StartTrimRight, lastTrim)
 		s.vars = s.vars[:mark]
 		result = append(result, nodes...)
