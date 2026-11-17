@@ -94,6 +94,26 @@ func (s *state) rangeOver(val reflect.Value, vars int, each func(index, elem ref
 		}
 		return true, nil
 	case reflect.Func:
+		if val.Type().CanSeq2() {
+			ran := false
+			for key, value := range val.Seq2() {
+				ran = true
+				var stop bool
+				var err error
+				if vars > 1 {
+					stop, err = each(key, value)
+				} else {
+					stop, err = each(reflect.Value{}, key)
+				}
+				if err != nil {
+					return false, err
+				}
+				if stop {
+					break
+				}
+			}
+			return ran, nil
+		}
 		if !val.Type().CanSeq() {
 			return false, s.errorf("range can't iterate over %v", val)
 		}
