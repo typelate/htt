@@ -400,12 +400,13 @@ func (s *state) walkRangeNode(dot reflect.Value, r *RangeNode) error {
 		if val.IsNil() {
 			break
 		}
-		i := 0
+		i, received := 0, false
 		for {
 			elem, ok := val.Recv()
 			if !ok {
 				break
 			}
+			received = true
 			if err := oneIteration(reflect.ValueOf(i), elem); err != nil {
 				if isBreak(err) {
 					break
@@ -418,7 +419,7 @@ func (s *state) walkRangeNode(dot reflect.Value, r *RangeNode) error {
 			}
 			i++
 		}
-		if i == 0 {
+		if !received {
 			break
 		}
 		s.vars = s.vars[:mark]
@@ -1504,12 +1505,13 @@ func (s *state) walkHTMLRange(dot reflect.Value, r *RangeNode) ([]*html.Node, er
 		if val.IsNil() {
 			break
 		}
-		i := 0
+		i, received := 0, false
 		for {
 			elem, ok := val.Recv()
 			if !ok {
 				break
 			}
+			received = true
 			if err := oneIteration(reflect.ValueOf(i), elem); err != nil {
 				if isBreak(err) {
 					break
@@ -1522,7 +1524,7 @@ func (s *state) walkHTMLRange(dot reflect.Value, r *RangeNode) ([]*html.Node, er
 			}
 			i++
 		}
-		if i == 0 {
+		if !received {
 			break
 		}
 		s.vars = s.vars[:mark]
