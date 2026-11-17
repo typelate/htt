@@ -45,8 +45,16 @@ func callArgsNilData() *callArgsData {
 // function was given.
 func callArgsFuncs() map[string]any {
 	return map[string]any{
-		"takeInt": func(x int) string { return fmt.Sprint(x) },
-		"takeU16": func(x uint16) string { return fmt.Sprint(x) },
+		"takeInt":  func(x int) string { return fmt.Sprint(x) },
+		"takeU16":  func(x uint16) string { return fmt.Sprint(x) },
+		"takeU8":   func(x uint8) string { return fmt.Sprint(x) },
+		"takeUint": func(x uint) string { return fmt.Sprint(x) },
+		"takeI32":  func(x int32) string { return fmt.Sprint(x) },
+		"takeF64":  func(x float64) string { return fmt.Sprint(x) },
+		"takeC128": func(x complex128) string { return fmt.Sprint(x) },
+		"takeBool": func(x bool) string { return fmt.Sprint(x) },
+		"takeStr":  func(x string) string { return x },
+		"takeAny":  func(x any) string { return fmt.Sprintf("%T", x) },
 		"variadicInt": func(xs ...int) string {
 			return fmt.Sprint(xs)
 		},
@@ -170,5 +178,23 @@ func TestArgumentConversion(t *testing.T) {
 		{name: "pointer to value and pointer", input: "{{takeTwo .VP .VP}}", data: callArgsConvData(), want: "5,5"},
 		{name: "string to uint16", input: "{{takeU16 .S}}", data: callArgsConvData(), wantErr: "wrong type for value; expected uint16"},
 		{name: "value that is not addressable to pointer", input: "{{takeVPtr mkV}}", data: callArgsConvData(), wantErr: "wrong type for value; expected *htt_test.callArgsV"},
+	})
+}
+
+func TestConstantArgumentTakesTheParametersKind(t *testing.T) {
+	runCallArgsRows(t, []callArgsRow{
+		{name: "float constant with integral value to int", input: "{{takeInt 3.0}}", want: "3"},
+		{name: "float constant with fraction to int", input: "{{takeInt 3.5}}", wantErr: "expected integer; found 3.5"},
+		{name: "integer constant to float64", input: "{{takeF64 3}}", want: "3"},
+		{name: "integer constant to uint8", input: "{{takeU8 3}}", want: "3"},
+		{name: "negative integer constant to uint", input: "{{takeUint -1}}", wantErr: "expected unsigned integer; found -1"},
+		{name: "character constant to int32", input: "{{takeI32 'a'}}", want: "97"},
+		{name: "string constant to int", input: `{{takeInt "x"}}`, wantErr: "expected integer; found"},
+		{name: "boolean constant to bool", input: "{{takeBool true}}", want: "true"},
+		{name: "integer constant to bool", input: "{{takeBool 1}}", wantErr: "expected bool; found 1"},
+		{name: "string constant to string", input: `{{takeStr "x"}}`, want: "x"},
+		{name: "integer constant to any", input: "{{takeAny 3}}", want: "int"},
+		{name: "float constant to any", input: "{{takeAny 3.5}}", want: "float64"},
+		{name: "complex constant to complex128", input: "{{takeC128 1+2i}}", want: "(1+2i)"},
 	})
 }

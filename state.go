@@ -752,15 +752,76 @@ func (s *state) evalArg(dot reflect.Value, typ reflect.Type, n Node) (reflect.Va
 	case *BoolNode:
 		return reflect.ValueOf(arg.True), nil
 	case *NumberNode:
-		v, err := s.idealConstant(arg)
-		if err != nil || typ == nil || !intLike(typ.Kind()) || v.Kind() != reflect.Int {
-			return v, err
+		if typ == nil {
+			return s.idealConstant(arg)
 		}
-		return v.Convert(typ), nil
+		return s.evalNumberArg(typ, arg)
 	case *StringNode:
-		return reflect.ValueOf(arg.Text), nil
+		if typ == nil {
+			return reflect.ValueOf(arg.Text), nil
+		}
+		return s.evalStringArg(typ, arg)
 	}
 	return missingVal, s.errorf("can't handle %s for arg", n)
+}
+
+// evalNumberArg converts a number constant to the parameter's basic kind, as
+// text/template's evalArg does. A kind it does not convert keeps the constant's
+// ideal type, and validateArg then decides whether the call can proceed.
+func (s *state) evalNumberArg(typ reflect.Type, n *NumberNode) (reflect.Value, error) {
+	value := reflect.New(typ).Elem()
+	switch typ.Kind() {
+	case reflect.Bool:
+		return missingVal, s.errorf("expected bool; found %s", n.Text)
+	case reflect.String:
+		return missingVal, s.errorf("expected string; found %s", n.Text)
+	case reflect.Complex64, reflect.Complex128:
+		if !n.IsComplex {
+			return missingVal, s.errorf("expected complex; found %s", n.Text)
+		}
+		value.SetComplex(n.Complex128)
+	case reflect.Float32, reflect.Float64:
+		if !n.IsFloat {
+			return missingVal, s.errorf("expected float; found %s", n.Text)
+		}
+		value.SetFloat(n.Float64)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if !n.IsInt {
+			return missingVal, s.errorf("expected integer; found %s", n.Text)
+		}
+		value.SetInt(n.Int64)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		if !n.IsUint {
+			return missingVal, s.errorf("expected unsigned integer; found %s", n.Text)
+		}
+		value.SetUint(n.Uint64)
+	default:
+		return s.idealConstant(n)
+	}
+	return value, nil
+}
+
+// evalStringArg converts a string constant to the parameter's basic kind, as
+// text/template's evalArg does. An interface or a kind it does not convert
+// receives the string itself.
+func (s *state) evalStringArg(typ reflect.Type, n *StringNode) (reflect.Value, error) {
+	switch typ.Kind() {
+	case reflect.Bool:
+		return missingVal, s.errorf("expected bool; found %s", n.Quoted)
+	case reflect.Complex64, reflect.Complex128:
+		return missingVal, s.errorf("expected complex; found %s", n.Quoted)
+	case reflect.Float32, reflect.Float64:
+		return missingVal, s.errorf("expected float; found %s", n.Quoted)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return missingVal, s.errorf("expected integer; found %s", n.Quoted)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return missingVal, s.errorf("expected unsigned integer; found %s", n.Quoted)
+	case reflect.String:
+		value := reflect.New(typ).Elem()
+		value.SetString(n.Text)
+		return value, nil
+	}
+	return reflect.ValueOf(n.Text), nil
 }
 
 // printValue writes the textual representation of the value to the writer.
