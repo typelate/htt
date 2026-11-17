@@ -930,7 +930,6 @@ func httText(test execTest) (out string, failed bool) {
 
 // Reasons a case diverges. Cases with the same cause share a string.
 const (
-	causeSlicePtr   = "slice does not accept a pointer to an array"
 	causeUnsafePtr  = "if does not accept unsafe.Pointer"
 	causePtrToIface = "a method is not found through a pointer to an interface"
 	causeStringer   = "String and Error are not found through an addressable value when printing"
@@ -939,15 +938,12 @@ const (
 
 // execDivergences maps a case name to why htt differs from text/template.
 var execDivergences = map[string]string{
-	"pointer to array[:]":   causeSlicePtr,
-	"pointer to array[1:]":  causeSlicePtr,
-	"pointer to array[1:2]": causeSlicePtr,
-	"if UPI":                causeUnsafePtr,
-	"if EmptyUPI":           causeUnsafePtr,
-	"bug1":                  causePtrToIface,
-	"V{6666}.String()":      causeStringer,
-	"W{888}.Error()":        causeStringer,
-	"empty with struct":     causePrintPtr,
+	"if UPI":            causeUnsafePtr,
+	"if EmptyUPI":       causeUnsafePtr,
+	"bug1":              causePtrToIface,
+	"V{6666}.String()":  causeStringer,
+	"W{888}.Error()":    causeStringer,
+	"empty with struct": causePrintPtr,
 }
 
 func TestCompatTextExecTests(t *testing.T) {
