@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	texttemplate "text/template"
+	"unsafe"
 
 	"github.com/typelate/htt"
 )
@@ -84,5 +85,17 @@ func TestSliceOfPointerToArray(t *testing.T) {
 		{"whole array", "{{slice .PA}}", "[3 4 5]"},
 		{"from second element", "{{slice .PA 1}}", "[4 5]"},
 		{"second element only", "{{slice .PA 1 2}}", "[4]"},
+	})
+}
+
+func TestUnsafePointerTruth(t *testing.T) {
+	type holder struct {
+		Set, Nil unsafe.Pointer
+	}
+	n := 23
+	data := holder{Set: unsafe.Pointer(&n)}
+	checkValueKinds(t, data, []struct{ name, input, want string }{
+		{"non-nil unsafe pointer is true", "{{if .Set}}NON-ZERO{{else}}ZERO{{end}}", "NON-ZERO"},
+		{"nil unsafe pointer is false", "{{if .Nil}}NON-ZERO{{else}}ZERO{{end}}", "ZERO"},
 	})
 }

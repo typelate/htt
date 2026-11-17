@@ -930,7 +930,6 @@ func httText(test execTest) (out string, failed bool) {
 
 // Reasons a case diverges. Cases with the same cause share a string.
 const (
-	causeUnsafePtr  = "if does not accept unsafe.Pointer"
 	causePtrToIface = "a method is not found through a pointer to an interface"
 	causeStringer   = "String and Error are not found through an addressable value when printing"
 	causePrintPtr   = "a pointer is not dereferenced when printed or passed to html"
@@ -938,8 +937,6 @@ const (
 
 // execDivergences maps a case name to why htt differs from text/template.
 var execDivergences = map[string]string{
-	"if UPI":            causeUnsafePtr,
-	"if EmptyUPI":       causeUnsafePtr,
 	"bug1":              causePtrToIface,
 	"V{6666}.String()":  causeStringer,
 	"W{888}.Error()":    causeStringer,
