@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"sync"
 
 	"github.com/typelate/htt"
@@ -54,13 +55,35 @@ func (e *escaper) commit() *escapePlan {
 }
 
 // planPipeline is html/template's ensurePipelineContains as an edit: the
-// value of the pipeline is piped through the escapers, in order.
-// A pipeline that names a predefined escaper is not planned yet, so p is
-// not read.
-func planPipeline(_ *htt.PipeNode, escapers []string) htt.ActionEdit {
-	edit := htt.ActionEdit{Funcs: make([]func(args ...any) string, 0, len(escapers))}
-	for _, name := range escapers {
-		edit.Funcs = append(edit.Funcs, funcMap[name])
+// value of the pipeline is piped through the escapers, in order. A predefined
+// escaper at the end of the pipeline that is equivalent to one of them is not
+// run; a one-command pipeline with arguments hands them to the first escaper.
+func planPipeline(p *htt.PipeNode, escapers []string) htt.ActionEdit {
+	var edit htt.ActionEdit
+	names := slices.Clone(escapers)
+	if n := len(p.Commands); n > 0 {
+		last := p.Commands[n-1]
+		if id, ok := last.Args[0].(*htt.IdentifierNode); ok && predefinedEscapers[id.Ident] {
+			esc := id.Ident
+			edit.EvalArgs = n == 1 && len(last.Args) > 1
+			dup := false
+			for i, name := range names {
+				if normalizeEscFn(name) == esc {
+					names[i] = esc
+					dup = true
+				}
+			}
+			switch {
+			case dup && !edit.EvalArgs:
+				edit.Drop = 1
+			case !dup && edit.EvalArgs:
+				names = append([]string{esc}, names...)
+			}
+		}
+	}
+	edit.Funcs = make([]func(args ...any) string, 0, len(names))
+	for _, name := range names {
+		edit.Funcs = append(edit.Funcs, escaperFunc(name))
 	}
 	if len(edit.Funcs) > 0 {
 		// html/template's types are trusted as this package's are.
@@ -68,6 +91,36 @@ func planPipeline(_ *htt.PipeNode, escapers []string) htt.ActionEdit {
 		edit.Funcs[0] = func(args ...any) string { return first(localContent(args)...) }
 	}
 	return edit
+}
+
+// escaperFunc returns the function that renders name safe: text/template's for
+// the predefined escapers, else the one in funcMap.
+func escaperFunc(name string) func(args ...any) string {
+	switch name {
+	case "html":
+		return HTMLEscaper
+	case "urlquery":
+		return URLQueryEscaper
+	}
+	return funcMap[name]
+}
+
+// equivEscapers matches contextual escapers to equivalent predefined
+// escapers, as html/template's equivEscapers does.
+var equivEscapers = map[string]string{
+	"_html_template_attrescaper":   "html",
+	"_html_template_htmlescaper":   "html",
+	"_html_template_rcdataescaper": "html",
+	"_html_template_urlescaper":    "urlquery",
+	"_html_template_urlnormalizer": "urlquery",
+}
+
+// normalizeEscFn returns the predefined escaper equivalent to e, or e.
+func normalizeEscFn(e string) string {
+	if norm := equivEscapers[e]; norm != "" {
+		return norm
+	}
+	return e
 }
 
 // localContent returns args with a value of one of html/template's

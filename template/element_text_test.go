@@ -64,6 +64,13 @@ func TestElementTextMatchesHTMLTemplate(t *testing.T) {
 			src:  "{{define \"u\" -}} <b>{{.}}</b> {{- end}}<p>{{template \"u\" .}}</p>",
 			data: "+",
 		},
+		{name: "pipeline ends with html", src: `<p>{{. | html}}</p>`, data: `<a&b+c d>`},
+		{name: "html command", src: `<p>{{html .}}</p>`, data: `<a&b+c d>`},
+		{name: "pipeline ends with urlquery", src: `<p>{{. | urlquery}}</p>`, data: `<a&b+c d>`},
+		{name: "urlquery command", src: `<p>{{urlquery .}}</p>`, data: `<a&b+c d>`},
+		{name: "html command with two arguments", src: `<p>{{html . .}}</p>`, data: `<a&b+c d>`},
+		{name: "html after a print", src: `<p>{{. | print | html}}</p>`, data: `<a&b+c d>`},
+		{name: "html after a printf", src: `<p>{{printf "%s" . | html}}</p>`, data: `<a&b+c d>`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			want := runHTMLTemplate(t, tt.src, tt.data)
@@ -88,7 +95,7 @@ func TestOldEngineStillRunsWhereTheEscaperIsNotUsed(t *testing.T) {
 	}{
 		{name: "action in a URL query", src: `<a href="/x?q={{.}}">x</a>`, data: `a b+&`, want: `<a href="/x?q=a b&#43;&amp;">x</a>`},
 		{name: "action in a script", src: `<script>var x = {{.}};</script>`, data: `a<+`, want: "<script>var x = \"a\\u003c\\u002b\";</script>"},
-		{name: "html in a pipeline", src: `<p>{{. | html}}</p>`, data: `<+`, want: `<p>&amp;lt;+</p>`},
+		{name: "html in a pipeline", src: `<p>{{. | html}}</p>`, data: `<+`, want: `<p>&lt;+</p>`},
 		{name: "call from an attribute", src: `{{define "u"}}{{.}}{{end}}<a title="{{template "u" .}}">`, data: `+`, want: `<a title="">`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

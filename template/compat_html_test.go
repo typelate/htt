@@ -855,7 +855,6 @@ func httHTML(name, input string, data any) (out string, failed bool) {
 
 // Reasons a case diverges. Cases with the same cause share a string.
 const (
-	causeOverescape  = "the html function's output is HTML-escaped a second time"
 	causeURLEncode   = "URL parts are HTML-escaped, not percent-encoded"
 	causeURLPath     = "a URL path value is not filtered as html/template filters it"
 	causeJSValue     = "values in JS contexts are not JSON-encoded as JS expressions"
@@ -871,9 +870,6 @@ const (
 // escapeDivergences maps a case name to why htt/template differs from
 // html/template.
 var escapeDivergences = map[string]string{
-	"overescaping1": causeOverescape,
-	"overescaping2": causeOverescape,
-
 	"constant":              causeURLEncode,
 	"nonHierURL":            causeURLEncode,
 	"urlQuery":              causeURLEncode,

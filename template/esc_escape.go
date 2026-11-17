@@ -169,8 +169,6 @@ func (e *escaper) escapeAction(c context, n *htt.ActionNode) context {
 		}
 		ident := node.Ident
 		if _, ok := predefinedEscapers[ident]; ok {
-			// UNSUPPORTED: a pipeline that names a predefined escaper is rewritten.
-			e.unsupportedBecause("a pipeline names a predefined escaper")
 			if pos < len(n.Pipe.Commands)-1 ||
 				c.state == stateAttr && c.delim == delimSpaceOrTagEnd && ident == "html" {
 				return context{
