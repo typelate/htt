@@ -91,13 +91,20 @@ type Error struct {
 	Line int
 	// Description is a human-readable description of the problem.
 	Description string
+	// location is ParseName:line:column of Node, as html/template prints it
+	// in place of Name. It is empty until the escaper locates Node.
+	location string
 }
 
 // Error formats e as html/template does.
 func (e *Error) Error() string {
 	switch {
 	case e.Node != nil:
-		return "html/template:" + e.Name + ": " + e.Description
+		name := e.Name
+		if e.location != "" {
+			name = e.location
+		}
+		return "html/template:" + name + ": " + e.Description
 	case e.Line != 0:
 		return "html/template:" + e.Name + ":" + strconv.Itoa(e.Line) + ": " + e.Description
 	case e.Name != "":

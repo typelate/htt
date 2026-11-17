@@ -1216,32 +1216,21 @@ func errorString(err error) string {
 	return err.Error()
 }
 
-// causeErrorPosition is the cause of a difference in the error string alone:
-// html/template prefixes the location of the node (z:1:11:), and this package
-// does not yet.
-const causeErrorPosition = "same error, the location prefix differs"
+// causeKeywordPosition is the cause of a difference in the location prefix of
+// a {{break}} or {{continue}}: html/template locates the keyword, and this
+// package keeps only the offset of the {{ that opens the action.
+const causeKeywordPosition = "same error, the location prefix differs: a break or continue has no keyword offset"
+
+// causeTemplateNamePosition is the cause of a difference in the location prefix
+// of a {{template}}: html/template locates the name, and this package keeps
+// only the offset of the {{ that opens the action.
+const causeTemplateNamePosition = "same error, the location prefix differs: a template call has no name offset"
 
 // errorDivergences names the TestCompatHTMLErrors cases whose error strings
 // differ from html/template's, with the cause.
 var errorDivergences = map[string]string{
-	"{{if .Cond}}<a{{end}}":                                  causeErrorPosition,
-	"{{if .Cond}}\n{{else}}\n<a{{end}}":                      causeErrorPosition,
-	`{{if .Cond}}<a href="foo">{{else}}<a href="bar>{{end}}`: causeErrorPosition,
-	"<a {{if .Cond}}href='{{else}}title='{{end}}{{.X}}'>":    causeErrorPosition,
-	"\n{{with .X}}<a{{end}}":                                 causeErrorPosition,
-	"\n{{with .X}}<a>{{else}}<a{{end}}":                      causeErrorPosition,
-	"\n{{range .Items}} x='<a{{end}}":                        causeErrorPosition,
-	"{{range .Items}}<a{{if .X}}{{break}}{{end}}>{{end}}":    causeErrorPosition,
-	"{{range .Items}}<a{{if .X}}{{continue}}{{end}}>{{end}}": causeErrorPosition,
-	"{{range .Items}}{{if .X}}{{break}}{{end}}<a{{if .Y}}{{continue}}{{end}}>{{if .Z}}{{continue}}{{end}}{{end}}": causeErrorPosition,
-	`<a href="{{if .F}}/foo?a={{else}}/bar/{{end}}{{.H}}">`:                                                       causeErrorPosition,
-	`{{template "foo"}}`: causeErrorPosition,
-	`<script>reverseList = [{{template "t"}}]</script>{{define "t"}}{{if .Tail}}{{template "t" .Tail}}{{end}}{{.Head}}",{{end}}`: causeErrorPosition,
-	`Hello, {{. | urlquery | print}}!`:            causeErrorPosition,
-	`Hello, {{. | html | print}}!`:                causeErrorPosition,
-	`Hello, {{html . | print}}!`:                  causeErrorPosition,
-	`<div class={{. | html}}>Hello<div>`:          causeErrorPosition,
-	`Hello, {{. | urlquery | html}}!`:             causeErrorPosition,
-	"<script>var a = `{{if .X}}`{{end}}":          causeErrorPosition,
-	"<script>var a = `{{if .X}}a{{else}}`{{end}}": causeErrorPosition,
+	"{{range .Items}}<a{{if .X}}{{break}}{{end}}>{{end}}":                                                         causeKeywordPosition,
+	"{{range .Items}}<a{{if .X}}{{continue}}{{end}}>{{end}}":                                                      causeKeywordPosition,
+	"{{range .Items}}{{if .X}}{{break}}{{end}}<a{{if .Y}}{{continue}}{{end}}>{{if .Z}}{{continue}}{{end}}{{end}}": causeKeywordPosition,
+	`{{template "foo"}}`: causeTemplateNamePosition,
 }

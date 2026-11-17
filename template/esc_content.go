@@ -11,6 +11,7 @@ import (
 	"reflect"
 
 	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // Changed: the content types (CSS, HTML, HTMLAttr, JS, JSStr, URL, Srcset)
@@ -111,5 +112,46 @@ func stringify(args ...any) (string, contentType) {
 // The template Name still needs to be supplied.
 // Changed: node is an htt.Node (was parse.Node).
 func errorf(k ErrorCode, node htt.Node, line int, f string, args ...any) *Error {
-	return &Error{k, node, "", line, fmt.Sprintf(f, args...)}
+	return &Error{k, node, "", line, fmt.Sprintf(f, args...), ""}
+}
+
+// locate records where in t the error's node starts, the way
+// (*parse.Tree).ErrorContext reports it: ParseName, the 1-based line and the
+// 0-based column. An earlier location is kept.
+// Changed: new. html/template computes this in Error; here the tree is at
+// hand only while it is escaped, so it is computed then.
+func (e *Error) locate(t *htt.Tree, pos lex.Pos) {
+	if e.location != "" {
+		return
+	}
+	p := t.PositionAt(pos)
+	e.location = fmt.Sprintf("%s:%d:%d", t.ParseName, p.Line, p.Column-1)
+}
+
+// nodeStart returns the offset that text/template records for node, which is
+// where html/template locates an error on it. It returns false for a node
+// whose offset htt does not record: a {{break}} or {{continue}} keyword, and
+// the name of a {{template}}. htt keeps only the offset of the {{ for those.
+// Changed: new.
+func nodeStart(node interface{ String() string }) (lex.Pos, bool) {
+	switch n := node.(type) {
+	case *htt.ActionNode:
+		return pipeStart(n.Pipe)
+	case *htt.IfNode:
+		return pipeStart(n.Pipe)
+	case *htt.RangeNode:
+		return pipeStart(n.Pipe)
+	case *htt.WithNode:
+		return pipeStart(n.Pipe)
+	}
+	return 0, false
+}
+
+// pipeStart returns the start of a branch's or action's pipeline, which is
+// where text/template records a branch or action.
+func pipeStart(pipe *htt.PipeNode) (lex.Pos, bool) {
+	if pipe == nil {
+		return 0, false
+	}
+	return pipe.Start(), true
 }

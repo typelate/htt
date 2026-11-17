@@ -32,7 +32,7 @@ func escapeTemplate(trees map[string]*htt.Tree, name string) (*escapePlan, error
 	if c.err != nil {
 		err, c.err.Name = c.err, name
 	} else if c.state != stateText {
-		err = &Error{ErrEndContext, nil, name, 0, fmt.Sprintf("ends in a non-text context: %v", c)}
+		err = &Error{ErrEndContext, nil, name, 0, fmt.Sprintf("ends in a non-text context: %v", c), ""}
 	}
 	if err != nil {
 		return nil, err
@@ -495,10 +495,9 @@ func (e *escaper) computeOutCtx(c context, dname string, t *htt.Tree) context {
 		// Use c1 as the error context if neither assumption worked.
 	}
 	if !ok && c1.state != stateError {
-		return context{
-			state: stateError,
-			err:   errorf(ErrOutputContext, t.Root, 0, "cannot compute output context for template %s", dname),
-		}
+		err := errorf(ErrOutputContext, t.Root, 0, "cannot compute output context for template %s", dname)
+		err.locate(t, t.RootStart())
+		return context{state: stateError, err: err}
 	}
 	return c1
 }
@@ -528,7 +527,13 @@ func (e *escaper) escapeTemplateBody(c context, dname string, t *htt.Tree) (cont
 	outer := e.instance
 	e.instance = dname
 	defer func() { e.instance = outer }()
-	return e.escapeListConditionally(c, t.Root, t.RootTrimFirst, t.RootTrimLast, filter)
+	out, ok := e.escapeListConditionally(c, t.Root, t.RootTrimFirst, t.RootTrimLast, filter)
+	if out.err != nil {
+		if pos, located := nodeStart(out.err.Node); located {
+			out.err.locate(t, pos)
+		}
+	}
+	return out, ok
 }
 
 // delimEnds maps each delim to a string of characters that terminate it.
