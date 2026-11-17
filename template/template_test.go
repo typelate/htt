@@ -346,33 +346,17 @@ func TestOrphanEndTagMatchesStdlib(t *testing.T) {
 	}
 }
 
-// TestMisnestedFormattingDiverges documents an intentional, permanent
-// divergence from stdlib html/template for misnested formatting tags —
-// not a bug to fix in a later task.
-//
-// Browsers restructure input like `<b><i>bold</b> tail</i>` using the
-// HTML5 adoption agency algorithm (reopening <i> after the misplaced
-// </b>). stdlib html/template does no tree construction at all — it is
-// a token-stream escaper, so it passes the bytes through completely
-// unchanged. htt, by contrast, builds a structural AST and renders that
-// structure back out, so it normalizes the misnested markup into
-// balanced tags (`</i></b>`) rather than reproducing the source
-// verbatim. The trailing `</i>` is a genuine orphan (no ancestor <i> is
-// open after the implicit close), so it round-trips verbatim per this
-// task's fix — that's the one part of the output this task owns.
-// htt's own misnested-tag diagnostic (plan Task 4, DiagMisnestedTag) is
-// what alerts template authors to the divergence; matching stdlib's
-// byte-for-byte passthrough for this case is out of scope and will
-// never be pursued.
-func TestMisnestedFormattingDiverges(t *testing.T) {
+// TestMisnestedFormattingPassesThrough states that a template with no
+// actions writes its source for misnested formatting tags, as stdlib
+// html/template does: it does no tree construction, so the bytes of
+// `<b><i>bold</b> tail</i>` pass through unchanged. Browsers restructure
+// that input with the HTML5 adoption agency algorithm; htt's misnested-tag
+// diagnostic (DiagMisnestedTag) is what alerts template authors to it.
+func TestMisnestedFormattingPassesThrough(t *testing.T) {
 	const src = `<b><i>bold</b> tail</i>`
-	const wantShim = `<b><i>bold</i></b> tail</i>`
-
-	if want := executeStdlib(t, src, nil); want == wantShim {
-		t.Fatalf("stdlib output for %q = %q, expected it to differ from the normalized output (fixture is stale)", src, want)
-	}
-	if got := executeShim(t, src, nil); got != wantShim {
-		t.Errorf("shim output for %q = %q, want %q", src, got, wantShim)
+	want := executeStdlib(t, src, nil)
+	if got := executeShim(t, src, nil); got != want {
+		t.Errorf("shim output for %q = %q, want %q", src, got, want)
 	}
 }
 
@@ -609,15 +593,17 @@ func TestElementsThatChangeTheTextContextAreClosed(t *testing.T) {
 				t.Errorf("stdlib Execute(%q) error = %v, want refused %v", src, err, tt.stdlibRefuse)
 			}
 			got := executeShim(t, src, data)
+			if !tt.stdlibRefuse {
+				// The escaper's output, which is stdlib's: no end tag is added.
+				if want := stdlib.String(); got != want {
+					t.Errorf("shim output for %q = %q, want stdlib's, %q", src, got, want)
+				}
+				continue
+			}
 			end := "</" + tt.element + ">"
 			escaped := HTMLEscapeString(data)
 			if !strings.HasPrefix(got, "<"+tt.element+">"+end) || !strings.Contains(got, escaped) {
 				t.Errorf("shim output for %q = %q, want the end tag %s, then the data escaped as HTML text %q", src, got, end, escaped)
-			}
-			if !tt.stdlibRefuse {
-				if want := strings.Replace(stdlib.String(), "<"+tt.element+">", "<"+tt.element+">"+end, 1); got != want {
-					t.Errorf("shim output for %q = %q, want stdlib's with the end tag, %q", src, got, want)
-				}
 			}
 		}
 	}

@@ -92,7 +92,8 @@ func (s *state) execute(dot reflect.Value) error {
 	if s.tree.HTMLMode || rootHasHTMLNodes(root) {
 		return s.executeHTMLList(dot, root)
 	}
-	return s.walk(dot, root)
+	// The root of a define or block trims by the markers on its opener and end.
+	return s.walkList(dot, root, s.tree.RootTrimFirst, s.tree.RootTrimLast)
 }
 
 func (s *state) executeHTML(dot reflect.Value, frag *HTMLDocumentFragmentNode) error {
@@ -198,10 +199,10 @@ func (s *state) walkList(dot reflect.Value, list *ListNode, trimFirst, trimLast 
 				continue
 			}
 			text := tn.Text
-			if (i == 0 && trimFirst) || (i > 0 && nodeRightTrim(nodes[i-1])) {
+			if (i == 0 && trimFirst) || (i > 0 && TrimsRight(nodes[i-1])) {
 				text = bytes.TrimLeft(text, trimCutset)
 			}
-			if (i == len(nodes)-1 && trimLast) || (i < len(nodes)-1 && nodeLeftTrim(nodes[i+1])) {
+			if (i == len(nodes)-1 && trimLast) || (i < len(nodes)-1 && TrimsLeft(nodes[i+1])) {
 				text = bytes.TrimRight(text, trimCutset)
 			}
 			if len(text) > 0 {
@@ -220,8 +221,8 @@ func (s *state) walkList(dot reflect.Value, list *ListNode, trimFirst, trimLast 
 
 const trimCutset = " \t\r\n"
 
-// nodeLeftTrim reports whether a node trims whitespace from preceding text.
-func nodeLeftTrim(n Node) bool {
+// TrimsLeft reports whether a node trims whitespace from preceding text.
+func TrimsLeft(n Node) bool {
 	switch n := n.(type) {
 	case *ActionNode:
 		return n.TrimLeft
@@ -240,13 +241,15 @@ func nodeLeftTrim(n Node) bool {
 	case *ContinueNode:
 		return n.TrimLeft
 	case *DefineNode:
+		return n.StartTrimLeft
+	case *BlockNode:
 		return n.StartTrimLeft
 	}
 	return false
 }
 
-// nodeRightTrim reports whether a node trims whitespace from following text.
-func nodeRightTrim(n Node) bool {
+// TrimsRight reports whether a node trims whitespace from following text.
+func TrimsRight(n Node) bool {
 	switch n := n.(type) {
 	case *ActionNode:
 		return n.TrimRight
@@ -265,6 +268,8 @@ func nodeRightTrim(n Node) bool {
 	case *ContinueNode:
 		return n.TrimRight
 	case *DefineNode:
+		return n.EndTrimRight
+	case *BlockNode:
 		return n.EndTrimRight
 	}
 	return false
@@ -1469,10 +1474,10 @@ func (s *state) walkHTMLNodes(dot reflect.Value, nodes []Node, trimFirst, trimLa
 	for i, node := range nodes {
 		if tn, ok := node.(*TextNode); ok {
 			text := string(tn.Text)
-			if (i == 0 && trimFirst) || (i > 0 && nodeRightTrim(nodes[i-1])) {
+			if (i == 0 && trimFirst) || (i > 0 && TrimsRight(nodes[i-1])) {
 				text = strings.TrimLeft(text, trimCutset)
 			}
-			if (i == len(nodes)-1 && trimLast) || (i < len(nodes)-1 && nodeLeftTrim(nodes[i+1])) {
+			if (i == len(nodes)-1 && trimLast) || (i < len(nodes)-1 && TrimsLeft(nodes[i+1])) {
 				text = strings.TrimRight(text, trimCutset)
 			}
 			tn.count.Add(1)

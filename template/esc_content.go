@@ -4,8 +4,6 @@
 
 // Copied from html/template/content.go and html/template/error.go of go1.27.3, with the changes marked below.
 
-//lint:file-ignore U1000 the escaper is wired in by later commits
-
 package template
 
 import (
@@ -114,29 +112,4 @@ func stringify(args ...any) (string, contentType) {
 // Changed: node is an htt.Node (was parse.Node).
 func errorf(k ErrorCode, node htt.Node, line int, f string, args ...any) *Error {
 	return &Error{k, node, "", line, fmt.Sprintf(f, args...)}
-}
-
-// Changed: filterFailsafe and delimEnds are declared in html/template/escape.go,
-// which is not copied yet; the copies above need them to compile. They move
-// to esc_escape.go with the adapted escape.go.
-
-// filterFailsafe is an innocuous word that is emitted in place of unsafe values
-// by sanitizer functions. It is not a keyword in any programming language,
-// contains no special characters, is not empty, and when it appears in output
-// it is distinct enough that a developer can find the source of the problem
-// via a search engine.
-const filterFailsafe = "ZgotmplZ"
-
-// delimEnds maps each delim to a string of characters that terminate it.
-var delimEnds = [...]string{
-	delimDoubleQuote: `"`,
-	delimSingleQuote: "'",
-	// Determined empirically by running the below in various browsers.
-	// var div = document.createElement("DIV");
-	// for (var i = 0; i < 0x10000; ++i) {
-	//   div.innerHTML = "<span title=x" + String.fromCharCode(i) + "-bar>";
-	//   if (div.getElementsByTagName("SPAN")[0].title.indexOf("bar") < 0)
-	//     document.write("<p>U+" + i.toString(16));
-	// }
-	delimSpaceOrTagEnd: " \t\n\f\r>",
 }

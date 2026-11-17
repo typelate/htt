@@ -2,8 +2,6 @@
 
 // Copied from html/template/element_string.go of go1.27.3, with the changes marked below.
 
-//lint:file-ignore U1000 the escaper is wired in by later commits
-
 package template
 
 import "strconv"

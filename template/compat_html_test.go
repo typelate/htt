@@ -862,7 +862,6 @@ const (
 	causeJSString    = "JS string and regexp literals are quoted differently"
 	causeCSSFilter   = "style values are not filtered as CSS (ZgotmplZ)"
 	causeCSSEncode   = "values in CSS strings and url() are not CSS- or percent-encoded"
-	causeDoctype     = "a doctype is not normalized"
 	causeComments    = "comments are kept and whitespace is not normalized"
 	causeScriptTags  = "<script and <!-- inside script literals are not escaped"
 	causeTypedHTML   = "typed HTML values are escaped where html/template strips tags or passes them through"
@@ -914,8 +913,6 @@ var escapeDivergences = map[string]string{
 	"styleURLMixedCase":                causeCSSEncode,
 	"styleStrSpecialsEncoded":          causeCSSEncode,
 	"styleURLSpecialsEncoded":          causeCSSEncode,
-
-	"HTML doctype not case-insensitive": causeDoctype,
 
 	"Split HTML comment":                                causeComments,
 	"JS line comment":                                   causeComments,

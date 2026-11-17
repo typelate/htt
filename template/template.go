@@ -18,6 +18,7 @@ package template
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -49,6 +50,13 @@ type common struct {
 	missingKey htt.MissingKeyMode
 	leftDelim  string
 	rightDelim string
+
+	// shadow is the same source as the trees of tmpl, parsed as text, by
+	// template name. A template added with AddParseTree has none.
+	shadow map[string]*htt.Tree
+	// esc holds the plans made from shadow. Anything that changes the
+	// templates replaces it.
+	esc *escapeSet
 }
 
 // New returns an undefined template named name, in a set of its own.
@@ -57,7 +65,9 @@ func New(name string) *Template {
 		name: name,
 	}
 	t.common = &common{
-		tmpl: map[string]*Template{name: t},
+		tmpl:   map[string]*Template{name: t},
+		shadow: make(map[string]*htt.Tree),
+		esc:    new(escapeSet),
 	}
 	return t
 }
@@ -134,6 +144,7 @@ func (t *Template) Funcs(funcMap FuncMap) *Template {
 	for k, v := range funcMap {
 		t.common.funcMap[k] = v
 	}
+	t.common.esc = new(escapeSet)
 	return t
 }
 
@@ -192,12 +203,57 @@ func (t *Template) Parse(text string) (*Template, error) {
 	for _, tr := range treeSet {
 		tr.ParseName, tr.Filepath = t.name, ""
 	}
+	replaced := make(map[string]bool)
 	for name, tr := range htt.DefinedTrees(tree, treeSet) {
-		if _, err := t.AddParseTree(name, tr); err != nil {
+		tmpl, err := t.AddParseTree(name, tr)
+		if err != nil {
 			return nil, err
 		}
+		replaced[name] = tmpl.Tree == tr
+	}
+	// UNSUPPORTED: a text-mode parse keeps no node for a define, so it loses
+	// the trim markers on one. Without a shadow, the old engine runs.
+	if definesTrim(tree) {
+		return t, nil
+	}
+	if err := t.parseShadow(text, replaced); err != nil {
+		return nil, err
 	}
 	return t, nil
+}
+
+// definesTrim reports whether a {{define}} in tree has a trim marker.
+func definesTrim(tree *htt.Tree) bool {
+	found := false
+	htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
+		if d, ok := n.(*htt.DefineNode); ok {
+			found = found || d.StartTrimLeft || d.StartTrimRight || d.EndTrimLeft || d.EndTrimRight
+		}
+	})
+	return found
+}
+
+// parseShadow parses text as text, as Parse parsed it as HTML, and keeps
+// the tree of each template in replaced that is true, since that template
+// now has the HTML tree Parse made.
+func (t *Template) parseShadow(text string, replaced map[string]bool) error {
+	options := t.lexOptions()
+	options.ParseHTML = false
+	treeSet := make(map[string]*htt.Tree)
+	tree, err := htt.ParseTree(t.name, t.name, text, treeSet, options)
+	if err != nil {
+		return err
+	}
+	tree.ParseName, tree.Filepath = t.name, ""
+	for _, tr := range treeSet {
+		tr.ParseName, tr.Filepath = t.name, ""
+	}
+	for name, tr := range htt.DefinedTrees(tree, treeSet) {
+		if replaced[name] {
+			t.common.shadow[name] = tr
+		}
+	}
+	return nil
 }
 
 // AddParseTree adds tree to t's set under name and returns its template.
@@ -215,7 +271,10 @@ func (t *Template) AddParseTree(name string, tree *htt.Tree) (*Template, error) 
 	}
 	if tmpl.Tree == nil || !htt.IsEmptyTree(tree.Root) {
 		tmpl.Tree = tree
+		// There is no source to parse as text for this tree.
+		delete(t.common.shadow, name)
 	}
+	t.common.esc = new(escapeSet)
 	return tmpl, nil
 }
 
@@ -230,6 +289,8 @@ func (t *Template) Clone() (*Template, error) {
 		missingKey: t.common.missingKey,
 		leftDelim:  t.common.leftDelim,
 		rightDelim: t.common.rightDelim,
+		shadow:     maps.Clone(t.common.shadow),
+		esc:        new(escapeSet),
 	}
 	if t.common.funcMap != nil {
 		nt.common.funcMap = maps.Clone(t.common.funcMap)
@@ -271,8 +332,17 @@ func (t *Template) execute(wr io.Writer, name string, data any) error {
 		return fmt.Errorf("html/template: %q is an incomplete or empty template%s", name, t.DefinedTemplates())
 	}
 	opts := t.execOptions()
+	// UNSUPPORTED: coverage is counted on the HTML tree, so a run that
+	// exports it uses the old engine.
 	if processCover != nil {
 		return processCover.execute(wr, tmpl.Tree, data, opts)
+	}
+	plan, err := t.common.esc.escapeTemplate(t.common.shadow, name)
+	if err == nil {
+		return htt.ExecuteTemplate(wr, t.common.shadow[name], data, t.shadowOptions(plan, name)...)
+	}
+	if !errors.Is(err, errUnsupported) {
+		return err
 	}
 	return htt.ExecuteTemplate(wr, tmpl.Tree, data, opts...)
 }
@@ -310,6 +380,24 @@ func (t *Template) execOptions() []htt.Option {
 	})
 	opts = append(opts, htt.WithFinder(finder))
 	return opts
+}
+
+// shadowOptions are the options to run the shadow tree of the template
+// named name under plan. The plan writes what html/template writes, so
+// nothing is trusted here.
+func (t *Template) shadowOptions(plan *escapePlan, name string) []htt.Option {
+	opts := []htt.Option{htt.WithPlan(plan, name)}
+	if t.common.funcMap != nil {
+		opts = append(opts, htt.WithFuncs(t.common.funcMap))
+	}
+	if t.common.missingKey != htt.MissingKeyInvalid {
+		opts = append(opts, htt.WithMissingKey(t.common.missingKey))
+	}
+	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
+		tree, ok := t.common.shadow[name]
+		return tree, ok
+	})
+	return append(opts, htt.WithFinder(finder))
 }
 
 func (t *Template) lexOptions() lex.Options {
