@@ -327,17 +327,30 @@ func (t *Template) execute(wr io.Writer, name string, data any) error {
 	if tmpl == nil || tmpl.Tree == nil {
 		return fmt.Errorf("html/template: %q is an incomplete or empty template%s", name, t.DefinedTemplates())
 	}
-	opts := t.execOptions()
-	// UNSUPPORTED: coverage is counted on the HTML tree, so a run that
-	// exports it uses the old engine.
-	if processCover != nil {
-		return processCover.execute(wr, tmpl.Tree, data, opts)
-	}
 	plan, err := t.common.esc.escapeTemplate(t.common.shadow, name)
 	if err != nil {
 		return err
 	}
-	return htt.ExecuteTemplate(wr, t.common.shadow[name], data, t.shadowOptions(plan, name)...)
+	text := t.common.shadow[name]
+	opts := t.shadowOptions(plan, name)
+	if processCover != nil {
+		return processCover.execute(wr, text, data, opts, t.htmlTreeOf)
+	}
+	return htt.ExecuteTemplate(wr, text, data, opts...)
+}
+
+// htmlTreeOf returns the tree with HTML structure that the shadow text tree
+// text stands for, or nil when no template has text as its shadow.
+func (t *Template) htmlTreeOf(text *htt.Tree) *htt.Tree {
+	for name, shadow := range t.common.shadow {
+		if shadow != text {
+			continue
+		}
+		if tmpl := t.common.tmpl[name]; tmpl != nil {
+			return tmpl.Tree
+		}
+	}
+	return nil
 }
 
 // ParseFiles parses the named files into t's set, each as a template named
@@ -354,17 +367,6 @@ func (t *Template) ParseGlob(pattern string) (*Template, error) {
 // ParseFS is ParseFiles for the files in fsys that match patterns.
 func (t *Template) ParseFS(fsys fs.FS, patterns ...string) (*Template, error) {
 	return parseFS(t, fsys, patterns...)
-}
-
-func (t *Template) execOptions() []htt.Option {
-	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
-		tmpl := t.common.tmpl[name]
-		if tmpl != nil && tmpl.Tree != nil {
-			return tmpl.Tree, true
-		}
-		return nil, false
-	})
-	return t.runOptions([]htt.Option{htt.WithTrust(trustOf)}, finder)
 }
 
 // shadowOptions are the options to run the shadow tree of the template

@@ -123,9 +123,13 @@ func normalizeEscFn(e string) string {
 	return e
 }
 
+// stdlibPkgPath is html/template's import path. Its content types are
+// recognized by name, since this package cannot import it.
+const stdlibPkgPath = "html/template"
+
 // localContent returns args with a value of one of html/template's
 // safe-content types as this package's type of the same name. This package
-// cannot import html/template, so it knows them by name, as trustOf does.
+// cannot import html/template, so it knows them by name.
 func localContent(args []any) []any {
 	if len(args) != 1 {
 		return args

@@ -72,23 +72,40 @@ func (c *coverExport) disable(err error) {
 	_, _ = fmt.Fprintf(c.stderr, "%s %v\n", CoverDisabledMarker, err)
 }
 
-// execute runs tree with a profile of its own, then appends the blocks it
-// reached for the first time. A profile per call keeps the export from
-// walking every tree after each execute.
-func (c *coverExport) execute(wr io.Writer, tree *htt.Tree, data any, opts []htt.Option) error {
+// execute runs text, the shadow tree of a template, with a profile of its
+// own, then appends the blocks of the HTML trees it reached for the first
+// time. htmlTree gives the tree with HTML structure for each text tree that
+// ran. A profile per call keeps the export from walking every tree after
+// each execute.
+func (c *coverExport) execute(wr io.Writer, text *htt.Tree, data any, opts []htt.Option, htmlTree func(*htt.Tree) *htt.Tree) error {
 	cp := new(htt.CoverProfile)
-	err := htt.ExecuteTemplate(wr, tree, data, append(opts, htt.WithCoverProfile(cp))...)
-	c.append(cp)
+	err := htt.ExecuteTemplate(wr, text, data, append(opts, htt.WithCoverProfile(cp))...)
+	c.append(cp, htmlTree)
 	return err
 }
 
-func (c *coverExport) append(cp *htt.CoverProfile) {
+// append gives each HTML tree the counts of the text tree that ran in its
+// place, then writes the blocks not written yet. A text tree that is its own
+// HTML tree is counted as it is. The counts are set under mu, since two
+// copies could store a stale lower count if they were set unserialized.
+func (c *coverExport) append(cp *htt.CoverProfile, htmlTree func(*htt.Tree) *htt.Tree) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.disabled {
 		return
 	}
-	if _, err := cp.WriteNewlyCovered(c.file, c.written); err != nil {
+	blocks := new(htt.CoverProfile)
+	for _, text := range cp.Trees() {
+		tree := htmlTree(text)
+		if tree == nil {
+			continue
+		}
+		if tree != text {
+			tree.CoverFrom(text)
+		}
+		blocks.AddTree(tree)
+	}
+	if _, err := blocks.WriteNewlyCovered(c.file, c.written); err != nil {
 		c.disable(err)
 	}
 }
