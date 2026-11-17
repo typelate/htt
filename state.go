@@ -734,6 +734,9 @@ func (s *state) evalArg(dot reflect.Value, typ reflect.Type, n Node) (reflect.Va
 		if typ != nil && canBeNil(typ) {
 			return reflect.Zero(typ), nil
 		}
+		if typ != nil && typ != reflectValueType {
+			return missingVal, s.errorf("cannot assign nil to %s", typ)
+		}
 		return reflect.ValueOf(nil), nil
 	case *FieldNode:
 		// zeroArgSentinel, not nil: see evalFieldChain.

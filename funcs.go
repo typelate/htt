@@ -138,8 +138,11 @@ func call(fn reflect.Value, args ...reflect.Value) (reflect.Value, error) {
 	}
 	argv := make([]reflect.Value, len(args))
 	for i, arg := range args {
-		arg = prepareArg(arg, argType(typ, i, numIn, dddType))
-		argv[i] = arg
+		paramType := argType(typ, i, numIn, dddType)
+		if !arg.IsValid() && !canBeNil(paramType) {
+			return reflect.Value{}, fmt.Errorf("value is nil; should be of type %s", paramType)
+		}
+		argv[i] = prepareArg(arg, paramType)
 	}
 	return safeCall(fn, argv)
 }

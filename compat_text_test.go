@@ -930,7 +930,6 @@ func httText(test execTest) (out string, failed bool) {
 
 // Reasons a case diverges. Cases with the same cause share a string.
 const (
-	causeNilArg      = "a nil literal argument is not checked against the parameter type"
 	causeNilParam    = "a nil interface argument is not converted to a pointer parameter type"
 	causeIfaceUnwrap = "len, index and range do not look through interface-typed values"
 	causeSlicePtr    = "slice does not accept a pointer to an array"
@@ -943,7 +942,6 @@ const (
 
 // execDivergences maps a case name to why htt differs from text/template.
 var execDivergences = map[string]string{
-	".VariadicFuncNilBad":       causeNilArg,
 	"nil pipeline":              causeNilParam,
 	"nil call arg":              causeNilParam,
 	"len of an interface field": causeIfaceUnwrap,
