@@ -6,6 +6,11 @@ import "reflect"
 // element. each reports stop to end the loop early. ran is false when val
 // held nothing, which is when the else list runs.
 func (s *state) rangeOver(val reflect.Value, vars int, each func(index, elem reflect.Value) (stop bool, err error)) (ran bool, err error) {
+	// A nil interface holds nothing to range over, as a nil one does in
+	// text/template.
+	if val.Kind() == reflect.Interface && val.IsNil() {
+		return false, nil
+	}
 	switch val.Kind() {
 	case reflect.Array, reflect.Slice:
 		if val.Len() == 0 {

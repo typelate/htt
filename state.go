@@ -587,7 +587,8 @@ func (s *state) findFunction(name string) (reflect.Value, bool) {
 
 func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, final reflect.Value, receiver reflect.Value) (reflect.Value, error) {
 	if !receiver.IsValid() {
-		return missingVal, s.errorf("nil pointer evaluating %s.%s", "<nil>", fieldName)
+		// Nil data has no field; text/template yields no value.
+		return reflect.Value{}, nil
 	}
 	typ := receiver.Type()
 	receiver = indirectInterface(receiver)
@@ -747,7 +748,8 @@ func (s *state) evalArg(dot reflect.Value, typ reflect.Type, n Node) (reflect.Va
 
 // printValue writes the textual representation of the value to the writer.
 func (s *state) printValue(wr io.Writer, v reflect.Value) (int, error) {
-	if !v.IsValid() {
+	// A nil interface holds no value, as indirectInterface reports it.
+	if !v.IsValid() || (v.Kind() == reflect.Interface && v.IsNil()) {
 		return wr.Write([]byte("<no value>"))
 	}
 	iface := printableValue(v)

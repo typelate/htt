@@ -930,50 +930,45 @@ func httText(test execTest) (out string, failed bool) {
 
 // Reasons a case diverges. Cases with the same cause share a string.
 const (
-	causeNilCommand   = "nil is accepted as a command; text/template rejects it"
-	causeNilArg       = "a nil literal argument is not checked against the parameter type"
-	causeNilParam     = "a nil interface argument is not converted to a pointer parameter type"
-	causeNilInterface = "a nil interface value errors where text/template yields <no value>, empty or false"
-	causeIfaceUnwrap  = "len, index and range do not look through interface-typed values"
-	causeSlicePtr     = "slice does not accept a pointer to an array"
-	causeUnsafePtr    = "if does not accept unsafe.Pointer"
-	causePtrToIface   = "a method is not found through a pointer to an interface"
-	causeArgConv      = "call arguments are not converted: int constant to uint16, pointer to or from value"
-	causeStringer     = "String and Error are not found through an addressable value when printing"
-	causePrintPtr     = "a pointer is not dereferenced when printed or passed to html"
+	causeNilCommand  = "nil is accepted as a command; text/template rejects it"
+	causeNilArg      = "a nil literal argument is not checked against the parameter type"
+	causeNilParam    = "a nil interface argument is not converted to a pointer parameter type"
+	causeIfaceUnwrap = "len, index and range do not look through interface-typed values"
+	causeSlicePtr    = "slice does not accept a pointer to an array"
+	causeUnsafePtr   = "if does not accept unsafe.Pointer"
+	causePtrToIface  = "a method is not found through a pointer to an interface"
+	causeArgConv     = "call arguments are not converted: int constant to uint16, pointer to or from value"
+	causeStringer    = "String and Error are not found through an addressable value when printing"
+	causePrintPtr    = "a pointer is not dereferenced when printed or passed to html"
 )
 
 // execDivergences maps a case name to why htt differs from text/template.
 var execDivergences = map[string]string{
-	"nil action":                       causeNilCommand,
-	"ideal nil without type":           causeNilCommand,
-	"if nil":                           causeNilCommand,
-	".VariadicFuncNilBad":              causeNilArg,
-	"nil pipeline":                     causeNilParam,
-	"nil call arg":                     causeNilParam,
-	"empty nil":                        causeNilInterface,
-	"field on interface":               causeNilInterface,
-	"field on parenthesized interface": causeNilInterface,
-	"and undef":                        causeNilInterface,
-	"or undef":                         causeNilInterface,
-	"range empty nil":                  causeNilInterface,
-	"len of an interface field":        causeIfaceUnwrap,
-	"range empty interface":            causeIfaceUnwrap,
-	"bug17c":                           causeIfaceUnwrap,
-	"bug17d":                           causeIfaceUnwrap,
-	"bug17e":                           causeIfaceUnwrap,
-	"pointer to array[:]":              causeSlicePtr,
-	"pointer to array[1:]":             causeSlicePtr,
-	"pointer to array[1:2]":            causeSlicePtr,
-	"if UPI":                           causeUnsafePtr,
-	"if EmptyUPI":                      causeUnsafePtr,
-	"bug1":                             causePtrToIface,
-	".Method2(3, .X)":                  causeArgConv,
-	"bug6b":                            causeArgConv,
-	"bug6c":                            causeArgConv,
-	"V{6666}.String()":                 causeStringer,
-	"W{888}.Error()":                   causeStringer,
-	"empty with struct":                causePrintPtr,
+	"nil action":                causeNilCommand,
+	"ideal nil without type":    causeNilCommand,
+	"if nil":                    causeNilCommand,
+	".VariadicFuncNilBad":       causeNilArg,
+	"nil pipeline":              causeNilParam,
+	"nil call arg":              causeNilParam,
+	"bug14a":                    causeNilCommand,
+	"bug14b":                    causeNilCommand,
+	"len of an interface field": causeIfaceUnwrap,
+	"range empty interface":     causeIfaceUnwrap,
+	"bug17c":                    causeIfaceUnwrap,
+	"bug17d":                    causeIfaceUnwrap,
+	"bug17e":                    causeIfaceUnwrap,
+	"pointer to array[:]":       causeSlicePtr,
+	"pointer to array[1:]":      causeSlicePtr,
+	"pointer to array[1:2]":     causeSlicePtr,
+	"if UPI":                    causeUnsafePtr,
+	"if EmptyUPI":               causeUnsafePtr,
+	"bug1":                      causePtrToIface,
+	".Method2(3, .X)":           causeArgConv,
+	"bug6b":                     causeArgConv,
+	"bug6c":                     causeArgConv,
+	"V{6666}.String()":          causeStringer,
+	"W{888}.Error()":            causeStringer,
+	"empty with struct":         causePrintPtr,
 }
 
 func TestCompatTextExecTests(t *testing.T) {
