@@ -941,7 +941,6 @@ const (
 	causeArgConv      = "call arguments are not converted: int constant to uint16, pointer to or from value"
 	causeStringer     = "String and Error are not found through an addressable value when printing"
 	causePrintPtr     = "a pointer is not dereferenced when printed or passed to html"
-	causeHTMLNil      = "html of an invalid value prints <nil>, not <no value>"
 )
 
 // execDivergences maps a case name to why htt differs from text/template.
@@ -975,8 +974,6 @@ var execDivergences = map[string]string{
 	"V{6666}.String()":                 causeStringer,
 	"W{888}.Error()":                   causeStringer,
 	"empty with struct":                causePrintPtr,
-	"html #2":                          causePrintPtr,
-	"html untyped nil":                 causeHTMLNil,
 }
 
 func TestCompatTextExecTests(t *testing.T) {

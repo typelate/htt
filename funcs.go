@@ -3,7 +3,6 @@ package htt
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	texttemplate "text/template"
 )
 
@@ -422,13 +421,7 @@ func doLt(k1, k2 kind, v1, v2 reflect.Value) (bool, error) {
 // HTML, JS, and URL-query escaping
 
 func htmlEscaper(args ...any) string {
-	return strings.NewReplacer(
-		"&", "&amp;",
-		"<", "&lt;",
-		">", "&gt;",
-		`"`, "&#34;",
-		"'", "&#39;",
-	).Replace(fmt.Sprint(args...))
+	return texttemplate.HTMLEscaper(args...)
 }
 
 func jsEscaper(args ...any) string {
