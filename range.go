@@ -145,19 +145,21 @@ func rangeCount(n uint64, typ reflect.Type, each func(index, elem reflect.Value)
 
 // setRangeVars gives the range's declared or assigned variables the
 // values of one iteration.
-func (s *state) setRangeVars(pipe *PipeNode, index, elem reflect.Value) {
+func (s *state) setRangeVars(pipe *PipeNode, index, elem reflect.Value) error {
 	if len(pipe.Decl) == 0 {
-		return
+		return nil
 	}
 	if pipe.IsAssign {
 		if len(pipe.Decl) > 1 {
-			s.setVar(pipe.Decl[0].Ident[0], index)
+			if err := s.setVar(pipe.Decl[0].Ident[0], index); err != nil {
+				return err
+			}
 		}
-		s.setVar(pipe.Decl[len(pipe.Decl)-1].Ident[0], elem)
-		return
+		return s.setVar(pipe.Decl[len(pipe.Decl)-1].Ident[0], elem)
 	}
 	s.setTopVar(1, elem)
 	if len(pipe.Decl) > 1 {
 		s.setTopVar(2, index)
 	}
+	return nil
 }

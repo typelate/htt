@@ -391,7 +391,9 @@ func (s *state) walkRangeNode(dot reflect.Value, r *RangeNode) error {
 	val, _ = indirect(val)
 	mark := len(s.vars)
 	ran, err := s.rangeOver(val, len(r.Pipe.Decl), func(index, elem reflect.Value) (bool, error) {
-		s.setRangeVars(r.Pipe, index, elem)
+		if err := s.setRangeVars(r.Pipe, index, elem); err != nil {
+			return false, err
+		}
 		lastTrim := r.BodyTrimLast()
 		err := s.walkList(elem, r.List, r.StartTrimRight, lastTrim)
 		s.vars = s.vars[:mark]
@@ -476,7 +478,9 @@ func (s *state) evalPipeline(dot reflect.Value, pipe *PipeNode) (reflect.Value, 
 	}
 	for _, vr := range pipe.Decl {
 		if pipe.IsAssign {
-			s.setVar(vr.Ident[0], value)
+			if err := s.setVar(vr.Ident[0], value); err != nil {
+				return missingVal, err
+			}
 		} else {
 			s.push(vr.Ident[0], value)
 		}
@@ -969,14 +973,14 @@ func (s *state) push(name string, value reflect.Value) {
 	s.vars = append(s.vars, variable{name, value})
 }
 
-func (s *state) setVar(name string, value reflect.Value) {
+func (s *state) setVar(name string, value reflect.Value) error {
 	for i := len(s.vars) - 1; i >= 0; i-- {
 		if s.vars[i].name == name {
 			s.vars[i].value = value
-			return
+			return nil
 		}
 	}
-	s.vars = append(s.vars, variable{name, value})
+	return s.errorf("undefined variable: %s", name)
 }
 
 func (s *state) setTopVar(n int, value reflect.Value) {
@@ -1403,7 +1407,9 @@ func (s *state) walkHTMLRange(dot reflect.Value, r *RangeNode) ([]*html.Node, er
 	mark := len(s.vars)
 	var result []*html.Node
 	ran, err := s.rangeOver(val, len(r.Pipe.Decl), func(index, elem reflect.Value) (bool, error) {
-		s.setRangeVars(r.Pipe, index, elem)
+		if err := s.setRangeVars(r.Pipe, index, elem); err != nil {
+			return false, err
+		}
 		lastTrim := r.BodyTrimLast()
 		nodes, err := s.walkHTMLList(elem, r.List, r.StartTrimRight, lastTrim)
 		s.vars = s.vars[:mark]
@@ -1584,7 +1590,9 @@ func (s *state) walkHTMLAttrRange(dot reflect.Value, r *RangeNode) ([]sourceAttr
 	mark := len(s.vars)
 	var result []sourceAttr
 	ran, err := s.rangeOver(val, len(r.Pipe.Decl), func(index, elem reflect.Value) (bool, error) {
-		s.setRangeVars(r.Pipe, index, elem)
+		if err := s.setRangeVars(r.Pipe, index, elem); err != nil {
+			return false, err
+		}
 		attrs, err := s.walkHTMLAttrList(elem, r.List)
 		s.vars = s.vars[:mark]
 		if err != nil {
