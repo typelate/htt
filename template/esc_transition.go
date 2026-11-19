@@ -48,6 +48,7 @@ var transitionFunc = [...]func(context, []byte) (context, int){
 	stateError:          tError,
 }
 
+// Changed: the two vars are grouped because gofumpt groups adjacent top-level vars.
 var (
 	commentStart = []byte("<!--")
 	commentEnd   = []byte("-->")

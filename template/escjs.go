@@ -403,6 +403,7 @@ var jsStrNormReplacementTable = []string{
 	'>':  `\u003e`,
 }
 
+// Changed: a blank line precedes this var; js.go has none, and no reason is recorded.
 var jsRegexpReplacementTable = []string{
 	0:    `\u0000`,
 	'\t': `\t`,

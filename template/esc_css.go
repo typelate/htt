@@ -212,6 +212,7 @@ var cssReplacementTable = []string{
 	'}':  `\7d`,
 }
 
+// Changed: the two vars are grouped because gofumpt groups adjacent top-level vars.
 var (
 	expressionBytes = []byte("expression")
 	mozBindingBytes = []byte("mozbinding")

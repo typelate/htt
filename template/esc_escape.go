@@ -3,16 +3,19 @@
 // license that can be found in the LICENSE file.
 
 // Copied from html/template/escape.go of go1.27.3, with the changes marked below.
+// Changed throughout: `parse.X` is `htt.X` for node and type names (`*parse.ActionNode` is `*htt.ActionNode`, `parse.Node` is `htt.Node`), and `Pipe.Cmds` is `Pipe.Commands`.
 
 package template
 
 import (
 	"bytes"
 	"fmt"
+	// Changed: internal/godebug and io are not imported; their uses are gone or in escape.go.
 	"html"
 	"maps"
 	"regexp"
 
+	// Changed: text/template is not imported; funcMap is a plain map in esc_plan.go.
 	"github.com/typelate/htt" // Changed: htt's nodes replace text/template/parse's.
 )
 
@@ -32,11 +35,14 @@ func escapeTemplate(trees map[string]*htt.Tree, name string) (*escapePlan, error
 	if c.err != nil {
 		err, c.err.Name = c.err, name
 	} else if c.state != stateText {
+		// Changed: Error has a location field (template/content.go), left empty here.
 		err = &Error{ErrEndContext, nil, name, 0, fmt.Sprintf("ends in a non-text context: %v", c), ""}
 	}
 	if err != nil {
+		// Changed: no template is marked unsafe; a failed escape returns no plan.
 		return nil, err
 	}
+	// Changed: commit returns the plan; no template tree is rewritten.
 	return e.commit(), nil
 }
 
@@ -53,8 +59,10 @@ type escaper struct {
 	// output[templateName] is the output context for a templateName that
 	// has been mangled to include its input context.
 	output map[string]context
+	// Changed: derived templates are not kept; a shadow tree is never cloned.
 	// called[templateName] is a set of called mangled template names.
 	called map[string]bool
+	// Changed: the comment names actionNodeEdits; the original has a placeholder, xxxNodeEdits.
 	// actionNodeEdits are the accumulated edits to apply during commit.
 	// Such edits are not applied immediately in case a template set
 	// executes a given template in different escaping contexts.
@@ -78,8 +86,10 @@ type rangeContext struct {
 }
 
 // makeEscaper creates a blank escaper for the given set.
+// Changed: makeEscaper takes the trees, not the name space.
 func makeEscaper(trees map[string]*htt.Tree) escaper {
 	return escaper{
+		// Changed: the trees and the plan's maps replace the name space and the rewrites.
 		trees:           trees,
 		output:          map[string]context{},
 		called:          map[string]bool{},
@@ -103,6 +113,7 @@ func (e *escaper) escape(c context, n htt.Node) context {
 	switch n := n.(type) {
 	case *htt.ActionNode:
 		return e.escapeAction(c, n)
+	// Changed: htt's BlockNode is a template call; text/template has no such node.
 	case *htt.BlockNode:
 		return e.escapeTemplate(c, n.Call(), n)
 	case *htt.BreakNode:
@@ -115,6 +126,7 @@ func (e *escaper) escape(c context, n htt.Node) context {
 		c.n = n
 		e.rangeContext.continues = append(e.rangeContext.continues, c)
 		return context{state: stateDead}
+	// Changed: DefineNode writes nothing; the TextNode case is gone, since escapeList escapes text.
 	case *htt.DefineNode:
 		return c
 	case *htt.IfNode:
@@ -131,6 +143,7 @@ func (e *escaper) escape(c context, n htt.Node) context {
 	panic("escaping " + n.String() + " is unimplemented")
 }
 
+// Changed: the GODEBUG vars jstmpllitinterp and htmlmetacontenturlescape are not copied.
 // escapeAction escapes an action template node.
 func (e *escaper) escapeAction(c context, n *htt.ActionNode) context {
 	if len(n.Pipe.Decl) != 0 {
@@ -232,6 +245,7 @@ func (e *escaper) escapeAction(c context, n *htt.ActionNode) context {
 	default:
 		s = append(s, "_html_template_attrescaper")
 	}
+	// Changed: the edit is keyed by planKey, the instance and node.
 	e.editActionNode(planKey{e.instance, n}, s)
 	return c
 }
@@ -247,6 +261,7 @@ var predefinedEscapers = map[string]bool{
 	"urlquery": true,
 }
 
+// Changed: the helpers named above (equivEscapers through newIdentCmd) are in esc_plan.go.
 // nudge returns the context that would result from following empty string
 // transitions from the input context.
 // For example, parsing:
@@ -341,6 +356,7 @@ func (e *escaper) escapeBranch(c context, node htt.Node, n *htt.BranchNode, node
 	if nodeName == "range" {
 		e.rangeContext = &rangeContext{outer: e.rangeContext}
 	}
+	// Changed: the body's trim is passed to escapeList, as the executor applies it.
 	c0 := e.escapeList(c.clone(), n.List, n.StartTrimRight, n.BodyTrimLast())
 	if nodeName == "range" {
 		if c0.state != stateError {
@@ -355,6 +371,7 @@ func (e *escaper) escapeBranch(c context, node htt.Node, n *htt.BranchNode, node
 		// We check that executing n.List once results in the same context
 		// as executing n.List twice.
 		e.rangeContext = &rangeContext{outer: e.rangeContext}
+		// Changed: the body's trim is passed, and join gets node, since a BranchNode is not a Node.
 		c1, _ := e.escapeListConditionally(c0, n.List, n.StartTrimRight, n.BodyTrimLast(), nil)
 		c0 = join(c0, c1, node, nodeName)
 		if c0.state == stateError {
@@ -372,10 +389,12 @@ func (e *escaper) escapeBranch(c context, node htt.Node, n *htt.BranchNode, node
 			return c0
 		}
 	}
+	// Changed: the else list's trim is passed, and join gets node, since a BranchNode is not a Node.
 	c1 := e.escapeList(c.clone(), n.ElseList, n.ElseTrimRight, n.EndTrimLeft)
 	return join(c0, c1, node, nodeName)
 }
 
+// Changed: the doc comment is new; escape.go has none.
 // joinRange merges the contexts at break and continue statements into the
 // context of the loop body.
 func joinRange(c0 context, rc *rangeContext) context {
@@ -408,6 +427,7 @@ func (e *escaper) escapeList(c context, n *htt.ListNode, trimFirst, trimLast boo
 	if n == nil {
 		return c
 	}
+	// Changed: a TextNode is escaped with the trim the executor applies (htt.TrimmedText).
 	for i, m := range n.Nodes {
 		if tn, ok := m.(*htt.TextNode); ok {
 			c = e.escapeText(c, tn, htt.TrimmedText(n.Nodes, i, trimFirst, trimLast))
@@ -425,24 +445,29 @@ func (e *escaper) escapeList(c context, n *htt.ListNode, trimFirst, trimLast boo
 // inferences in e if the inferences and output context satisfy filter.
 // It returns the best guess at an output context, and the result of the filter
 // which is the same as whether e was updated.
+// Changed: the trim and the instance are passed; the nested escaper inherits the instance.
 func (e *escaper) escapeListConditionally(c context, n *htt.ListNode, trimFirst, trimLast bool, filter func(*escaper, context) bool) (context, bool) {
 	e1 := makeEscaper(e.trees)
 	e1.instance = e.instance
 	e1.rangeContext = e.rangeContext
 	// Make type inferences available to f.
 	maps.Copy(e1.output, e.output)
+	// Changed: the trim is passed to the nested list.
 	c = e1.escapeList(c, n, trimFirst, trimLast)
 	ok := filter != nil && filter(&e1, c)
 	if ok {
 		// Copy inferences and edits from e1 back into e.
 		maps.Copy(e.output, e1.output)
+		// Changed: derived templates are not kept, so there is no maps.Copy of derived.
 		maps.Copy(e.called, e1.called)
 		for k, v := range e1.actionNodeEdits {
 			e.editActionNode(k, v)
 		}
+		// Changed: the templateNodeEdits loop is removed; the callEdits loop, below, replaces it.
 		for k, v := range e1.textNodeEdits {
 			e.editTextNode(k, v)
 		}
+		// Changed: callEdits replace templateNodeEdits, which is not copied.
 		for k, v := range e1.callEdits {
 			e.editCall(k, v)
 		}
@@ -455,6 +480,7 @@ func (e *escaper) escapeListConditionally(c context, n *htt.ListNode, trimFirst,
 // Changed: the instance the call runs as is recorded for Plan.Call.
 func (e *escaper) escapeTemplate(c context, n *htt.TemplateNode, call htt.Node) context {
 	c, name := e.escapeTree(c, n, n.Name, n.Line)
+	// Changed: the call is recorded for Plan.Call; the template is not rewritten.
 	e.editCall(planKey{e.instance, call}, name)
 	return c
 }
@@ -472,6 +498,7 @@ func (e *escaper) escapeTree(c context, node htt.Node, name string, line int) (c
 		// Already escaped.
 		return out, dname
 	}
+	// Changed: e.trees replaces the text/template lookup; the empty-template case has no tree to report.
 	t, defined := e.trees[name]
 	if !defined {
 		return context{
@@ -486,22 +513,27 @@ func (e *escaper) escapeTree(c context, node htt.Node, name string, line int) (c
 			err:   errorf(ErrNoSuchTemplate, node, line, "%q was added from a tree with HTML structure and has no text form to escape", name),
 		}, dname
 	}
+	// Changed: the tree and its mangled name are passed to computeOutCtx.
 	return e.computeOutCtx(c, dname, t), dname
 }
 
 // computeOutCtx takes a template and its start context and computes the output
 // context while storing any inferences in e.
+// Changed: it takes the tree and the mangled name, not the template.
 func (e *escaper) computeOutCtx(c context, dname string, t *htt.Tree) context {
 	// Propagate context over the body.
+	// Changed: escapeTemplateBody takes the mangled name and the tree.
 	c1, ok := e.escapeTemplateBody(c, dname, t)
 	if !ok {
 		// Look for a fixed point by assuming c1 as the output context.
+		// Changed: the same mangled name and tree, for the second assumption.
 		if c2, ok2 := e.escapeTemplateBody(c1, dname, t); ok2 {
 			c1, ok = c2, true
 		}
 		// Use c1 as the error context if neither assumption worked.
 	}
 	if !ok && c1.state != stateError {
+		// Changed: the error is located at the tree's root, as html/template locates it.
 		err := errorf(ErrOutputContext, t.Root, 0, "cannot compute output context for template %s", dname)
 		err.locate(t, t.RootStart())
 		return context{state: stateError, err: err}
@@ -512,12 +544,14 @@ func (e *escaper) computeOutCtx(c context, dname string, t *htt.Tree) context {
 // escapeTemplateBody escapes the given template assuming the given output
 // context, and returns the best guess at the output context and whether the
 // assumption was correct.
+// Changed: it takes the mangled name and the tree, not the template.
 func (e *escaper) escapeTemplateBody(c context, dname string, t *htt.Tree) (context, bool) {
 	filter := func(e1 *escaper, c1 context) bool {
 		if c1.state == stateError {
 			// Do not update the input escaper, e.
 			return false
 		}
+		// Changed: dname replaces t.Name(), the mangled name of the template.
 		if !e1.called[dname] {
 			// If t is not recursively called, then c1 is an
 			// accurate output context.
@@ -530,6 +564,7 @@ func (e *escaper) escapeTemplateBody(c context, dname string, t *htt.Tree) (cont
 	// take the fast path out of escapeTree instead of infinitely recurring.
 	// Naively assuming that the input context is the same as the output
 	// works >90% of the time.
+	// Changed: the body runs as the instance dname, and its edits are keyed by it.
 	e.output[dname] = c
 	outer := e.instance
 	e.instance = dname
@@ -614,6 +649,7 @@ func (e *escaper) escapeText(c context, n *htt.TextNode, text []byte) context {
 				// the entire comment is considered to be a
 				// LineTerminator for purposes of parsing by
 				// the syntactic grammar."
+				// Changed: the separators are literal U+2028 and U+2029 runes, not escapes; same runes; no reason recorded.
 				if bytes.ContainsAny(s[written:i1], "\n\r  ") {
 					b.WriteByte('\n')
 				} else {
@@ -650,8 +686,10 @@ func (e *escaper) escapeText(c context, n *htt.TextNode, text []byte) context {
 
 	if written != 0 && c.state != stateError {
 		if !isComment(c.state) || c.delim != delimNone {
+			// Changed: text, with its trim applied, replaces n.Text.
 			b.Write(text[written:])
 		}
+		// Changed: the comment is new, and the edit is keyed by planKey.
 		// The executor writes this in place of n, so it is not trimmed again.
 		e.editTextNode(planKey{e.instance, n}, b.Bytes())
 	}
@@ -721,12 +759,14 @@ func contextAfterText(c context, s []byte) (context, int) {
 	return context{state: stateTag, element: element}, i
 }
 
+// Changed: editActionNode and editTemplateNode are moved below, keyed by planKey; editCall replaces the latter.
 // editTextNode records a change to a text node for later commit.
 // Changed: the key names the instance as well as the node.
 func (e *escaper) editTextNode(k planKey, text []byte) {
 	if _, ok := e.textNodeEdits[k]; ok {
 		panic(fmt.Sprintf("node %s shared between templates", k.node))
 	}
+	// Changed: stored under the planKey.
 	e.textNodeEdits[k] = text
 }
 
@@ -736,6 +776,7 @@ func (e *escaper) editActionNode(k planKey, cmds []string) {
 	if _, ok := e.actionNodeEdits[k]; ok {
 		panic(fmt.Sprintf("node %s shared between templates", k.node))
 	}
+	// Changed: commit is in esc_plan.go; this only records the edit.
 	e.actionNodeEdits[k] = cmds
 }
 
@@ -744,6 +785,7 @@ func (e *escaper) editCall(k planKey, instance string) {
 	if _, ok := e.callEdits[k]; ok {
 		panic(fmt.Sprintf("node %s shared between templates", k.node))
 	}
+	// Changed: the instance is recorded for commit, as the other edits are.
 	e.callEdits[k] = instance
 }
 

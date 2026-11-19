@@ -10,15 +10,18 @@ import (
 	"fmt"
 	"reflect"
 
+	// Changed: error.go's text/template/parse import becomes htt and lex here.
 	"github.com/typelate/htt"
 	"github.com/typelate/htt/lex"
 )
 
-// Changed: the content types (CSS, HTML, HTMLAttr, JS, JSStr, URL, Srcset)
-// are declared in content.go and are not repeated here.
+// Changed: content.go's content types and error.go's Error and ErrorCode are
+// declared in template/content.go, this package's own file, so not here.
 
+// Changed: error.go's ErrorCode type is declared in template/content.go.
 type contentType uint8
 
+// Changed: error.go's ErrorCode codes and their comments are in template/content.go.
 const (
 	contentTypePlain contentType = iota
 	contentTypeCSS
@@ -34,6 +37,7 @@ const (
 	contentTypeUnsafe
 )
 
+// Changed: error.go's codes from ErrAmbigContext to ErrBadHTML are in template/content.go.
 // indirect returns the value, after dereferencing as many times
 // as necessary to reach the base type (or nil).
 func indirect(a any) any {
@@ -51,11 +55,13 @@ func indirect(a any) any {
 	return v.Interface()
 }
 
+// Changed: error.go's codes from ErrBranchEnd onward are in template/content.go.
 var (
 	errorType       = reflect.TypeFor[error]()
 	fmtStringerType = reflect.TypeFor[fmt.Stringer]()
 )
 
+// Changed: error.go's codes from ErrBranchEnd onward are in template/content.go.
 // indirectToStringerOrError returns the value, after dereferencing as many times
 // as necessary to reach the base type (or nil) or an implementation of fmt.Stringer
 // or error.
@@ -70,6 +76,7 @@ func indirectToStringerOrError(a any) any {
 	return v.Interface()
 }
 
+// Changed: error.go's codes and the Error method are in template/content.go.
 // stringify converts its arguments to a string and the type of the content.
 // All pointers are dereferenced, as in the text/template package.
 func stringify(args ...any) (string, contentType) {
@@ -102,6 +109,7 @@ func stringify(args ...any) (string, contentType) {
 			continue
 		}
 
+		// Changed: error.go's ErrEndContext to ErrNoSuchTemplate codes are in template/content.go.
 		args[i] = indirectToStringerOrError(arg)
 		i++
 	}
@@ -154,6 +162,7 @@ func nodeStart(node interface{ String() string }) (lex.Pos, bool) {
 
 // pipeStart returns the start of a branch's or action's pipeline, which is
 // where text/template records a branch or action.
+// Changed: new; htt's PipeNode.Start gives that position. error.go's Error method is in template/content.go.
 func pipeStart(pipe *htt.PipeNode) (lex.Pos, bool) {
 	if pipe == nil {
 		return 0, false
