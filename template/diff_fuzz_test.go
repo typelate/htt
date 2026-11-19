@@ -6,14 +6,21 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/version"
 	htmltemplate "html/template"
 	"os"
+	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/typelate/htt/template"
 )
+
+// escaperCopyVersion is the Go release the copied escaper sources came from.
+// An older Go's html/template lacks fixes this package already has.
+const escaperCopyVersion = "go1.27.3"
 
 // FuzzDiffEscape runs each template text through html/template and through
 // this package. Both must fail or both succeed, and a success must write the
@@ -22,6 +29,10 @@ import (
 // that html/template parses and this package does not is also skipped: the
 // root package's FuzzStdlibAcceptsImpliesHTMLParses owns that property.
 func FuzzDiffEscape(f *testing.F) {
+	if version.Compare(runtime.Version(), escaperCopyVersion) < 0 {
+		f.Skipf("running %s, but the escaper was copied from %s; rerun with Go %s or newer, whose html/template has the fixes this package carries",
+			runtime.Version(), escaperCopyVersion, escaperCopyVersion)
+	}
 	const value = "a'b/c&d=e</"
 	for _, input := range compatTableInputs(f) {
 		f.Add(input, value)
@@ -125,6 +136,48 @@ func compatTableInputs(t testing.TB) []string {
 		t.Fatal("no table rows found in compat_html_test.go")
 	}
 	return inputs
+}
+
+// TestEscaperCopyVersion checks that every copied html/template file names the
+// Go release in escaperCopyVersion, so the fuzz target's version gate cannot
+// drift from the sources it guards.
+func TestEscaperCopyVersion(t *testing.T) {
+	const prefix = "// Copied from html/template/"
+	versionPattern := regexp.MustCompile(`of (go[0-9.]+)`)
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read template dir: %v", err)
+	}
+	var copied int
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") {
+			continue
+		}
+		src, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		for _, line := range strings.Split(string(src), "\n") {
+			if !strings.HasPrefix(line, prefix) {
+				continue
+			}
+			copied++
+			m := versionPattern.FindStringSubmatch(line)
+			if m == nil {
+				t.Errorf("%s: no Go version in %q", name, line)
+				continue
+			}
+			// The sentence-ending period after the version is not part of it.
+			found := strings.TrimSuffix(m[1], ".")
+			if found != escaperCopyVersion {
+				t.Errorf("%s: copied from %s, want %s (escaperCopyVersion)", name, found, escaperCopyVersion)
+			}
+		}
+	}
+	if copied == 0 {
+		t.Fatal("no files carry the 'Copied from html/template/' line")
+	}
 }
 
 // fieldIndex returns the position of the named field in st, or -1.
