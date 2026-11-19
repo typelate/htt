@@ -649,8 +649,7 @@ func (e *escaper) escapeText(c context, n *htt.TextNode, text []byte) context {
 				// the entire comment is considered to be a
 				// LineTerminator for purposes of parsing by
 				// the syntactic grammar."
-				// Changed: the separators are literal U+2028 and U+2029 runes, not escapes; same runes; no reason recorded.
-				if bytes.ContainsAny(s[written:i1], "\n\r  ") {
+				if bytes.ContainsAny(s[written:i1], "\n\r\u2028\u2029") {
 					b.WriteByte('\n')
 				} else {
 					b.WriteByte(' ')
