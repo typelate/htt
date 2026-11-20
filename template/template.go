@@ -59,6 +59,10 @@ type common struct {
 	// template name. A template added from a tree with HTML structure is nil:
 	// it has no text form to escape.
 	shadow map[string]*htt.Tree
+	// bodies is the parse tree of each name in the set, as text/template keeps
+	// its bodies in the set. A template made again with New takes its body
+	// from here, so an empty Parse leaves the body in place.
+	bodies map[string]*htt.Tree
 	// esc holds the plans made from shadow. Anything that changes the
 	// templates replaces it.
 	esc *escapeSet
@@ -77,6 +81,7 @@ func New(name string) *Template {
 	t.common = &common{
 		tmpl:   map[string]*Template{name: t},
 		shadow: make(map[string]*htt.Tree),
+		bodies: make(map[string]*htt.Tree),
 		esc:    new(escapeSet),
 	}
 	return t
@@ -283,12 +288,13 @@ func (t *Template) addTree(name string, tree *htt.Tree) (*Template, bool) {
 		}
 		t.common.tmpl[name] = tmpl
 	}
-	replaced := tmpl.Tree == nil || !htt.IsEmptyTree(tree.Root)
+	replaced := t.common.bodies[name] == nil || !htt.IsEmptyTree(tree.Root)
 	if replaced {
-		tmpl.Tree = tree
+		t.common.bodies[name] = tree
 		// A nil shadow marks a template defined with no text form to escape.
 		t.common.shadow[name] = nil
 	}
+	tmpl.Tree = t.common.bodies[name]
 	return tmpl, replaced
 }
 
@@ -307,6 +313,7 @@ func (t *Template) Clone() (*Template, error) {
 		leftDelim:  t.common.leftDelim,
 		rightDelim: t.common.rightDelim,
 		shadow:     maps.Clone(t.common.shadow),
+		bodies:     maps.Clone(t.common.bodies),
 		esc:        new(escapeSet),
 	}
 	if t.common.funcMap != nil {

@@ -249,10 +249,6 @@ func TestEmptyTemplate(t *testing.T) {
 		// Changed: each row is a subtest, so that a row that differs from
 		// html/template can be skipped alone. The continue is now a return.
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			// Changed: row 5 differs; see the report in the commit body.
-			if i == 5 {
-				t.Skip("differs from html/template: a later empty Parse of a name replaces its body with nothing here; html/template keeps the earlier body, so it prints \"twice\"")
-			}
 			root := New("root")
 
 			var (
