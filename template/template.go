@@ -6,9 +6,10 @@
 // text-mode parse of the same source. The header of esc_escape.go names
 // the Go release the copy came from: the output and the escaping errors
 // are that html/template's, whatever Go builds the program, and a fix Go
-// makes later reaches this package only when the copy is updated. The copy
-// is checked against the standard library's escaping and error tables and
-// by a differential fuzz, and nothing more: do not serve its output.
+// makes later reaches this package only when the copy is updated.
+// html/template's own tests run against this package, and a fuzz target
+// compares the two. It is for executing templates in tests: do not serve
+// its output.
 //
 // The safe-content types are this package's own. Values of html/template's
 // content types are recognized as well.
