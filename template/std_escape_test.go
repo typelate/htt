@@ -374,9 +374,7 @@ func TestOrphanedTemplate(t *testing.T) {
 
 	var b strings.Builder
 	const wantError = `template: "foo" is an incomplete or empty template`
-	// Changed: t1 and t2 share the name "foo", so t1 executes t2's "bar" instead of failing.
 	t.Run("t1 is incomplete", func(t *testing.T) {
-		t.Skip("differs from html/template: t1 executes the \"foo\" that t2 replaced and writes \"bar\", no error")
 		if err := t1.Execute(&b, "javascript:alert(1)"); err == nil {
 			t.Fatal("expected error executing t1")
 		} else if gotError := err.Error(); gotError != wantError {
