@@ -1032,3 +1032,54 @@ func TestTrustedHTMLInTitleAndTextareaMatchesStdlib(t *testing.T) {
 		}
 	}
 }
+
+// The errors of an empty or undefined template are html/template's, text
+// for text, as the standard library gives them.
+func TestExecuteErrorsAreHTMLTemplatesErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func() error
+		want string
+	}{
+		{
+			name: "Execute of a new template",
+			run:  func() error { return New("empty").Execute(io.Discard, 0) },
+			want: `template: "empty" is an incomplete or empty template`,
+		},
+		{
+			name: "ExecuteTemplate of the template itself, not parsed",
+			run:  func() error { return New("empty").ExecuteTemplate(io.Discard, "empty", 0) },
+			want: `html/template: "empty" is an incomplete template`,
+		},
+		{
+			name: "ExecuteTemplate of an undefined name",
+			run: func() error {
+				set := New("a")
+				Must(set.Parse(`{{define "b"}}x{{end}}`))
+				return set.ExecuteTemplate(io.Discard, "zz", 0)
+			},
+			want: `html/template: "zz" is undefined`,
+		},
+		{
+			name: "ExecuteTemplate of a name made with New and not parsed",
+			run: func() error {
+				set := New("a")
+				Must(set.Parse(`hi`))
+				set.New("b")
+				return set.ExecuteTemplate(io.Discard, "b", 0)
+			},
+			want: `html/template: "b" is an incomplete template`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.run()
+			if err == nil {
+				t.Fatal("got nil error")
+			}
+			if got := err.Error(); got != tt.want {
+				t.Errorf("error = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

@@ -131,8 +131,8 @@ func (t *Template) Templates() []*Template {
 }
 
 // DefinedTemplates returns the names of the parsed templates after
-// "; defined templates are: ", or "" when there are none. It is for error
-// messages.
+// "; defined templates are: ", or "" when there are none. No execution error
+// lists them, as html/template's do not.
 func (t *Template) DefinedTemplates() string {
 	var names []string
 	for _, tmpl := range t.common.tmpl {
@@ -370,17 +370,17 @@ func (t *Template) Execute(wr io.Writer, data any) error {
 func (t *Template) ExecuteTemplate(wr io.Writer, name string, data any) error {
 	t.markExecuted()
 	tmpl := t.Lookup(name)
-	if tmpl == nil || tmpl.Tree == nil {
-		return fmt.Errorf("html/template: %q is an incomplete or empty template%s", name, t.DefinedTemplates())
+	if tmpl == nil {
+		return fmt.Errorf("html/template: %q is undefined", name)
+	}
+	if tmpl.Tree == nil {
+		return fmt.Errorf("html/template: %q is an incomplete template", name)
 	}
 	return tmpl.execute(wr, name, data)
 }
 
+// execute runs the template named name, which is parsed.
 func (t *Template) execute(wr io.Writer, name string, data any) error {
-	tmpl := t.common.tmpl[name]
-	if tmpl == nil || tmpl.Tree == nil {
-		return fmt.Errorf("html/template: %q is an incomplete or empty template%s", name, t.DefinedTemplates())
-	}
 	plan, err := t.common.esc.escapeTemplate(t.common.shadow, name)
 	if err != nil {
 		return err

@@ -1070,8 +1070,6 @@ func TestExecuteOnNewTemplate(t *testing.T) {
 const testTemplates = `{{define "one"}}one{{end}}{{define "two"}}two{{end}}`
 
 func TestMessageForExecuteEmpty(t *testing.T) {
-	// Changed: both messages differ, and so does the secondary template's execution.
-	t.Skip("differs from html/template: the incomplete-template message starts \"html/template:\", not \"template:\"; AddParseTree of a tree with HTML structure is refused (\"has no text form to escape\"), so ExecuteTemplate(\"secondary\") fails")
 	// Test a truly empty template.
 	tmpl := New("empty")
 	var b bytes.Buffer
@@ -1101,10 +1099,12 @@ func TestMessageForExecuteEmpty(t *testing.T) {
 		t.Errorf("expected error %s got %s", want, got)
 	}
 	// Make sure we can execute the secondary.
-	err = tmpl.ExecuteTemplate(&b, "secondary", 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Run("secondary", func(t *testing.T) {
+		t.Skip("differs from html/template: \"secondary\" is a tree with HTML structure from another set, which AddParseTree keeps without a text form, so ExecuteTemplate fails with \"has no text form to escape\"")
+		if err := tmpl.ExecuteTemplate(&b, "secondary", 0); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
 
 func TestFinalForPrintf(t *testing.T) {
