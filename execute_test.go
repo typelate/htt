@@ -1413,11 +1413,13 @@ func TestErrorArgumentToParenthesizedStage(t *testing.T) {
 			require.Error(t, htmlErr, "html/template")
 
 			// text/template prefixes "template: NAME:LINE:COL: executing ... at <...>: ".
-			_, want, ok := strings.Cut(stdlibErr.Error(), ">: ")
+			_, message, ok := strings.Cut(stdlibErr.Error(), ">: ")
 			require.True(t, ok, "text/template error shape: %v", stdlibErr)
-			require.Contains(t, want, `can't give argument to non-function`)
-			assert.ErrorContains(t, htmlErr, want, "html/template")
+			require.Contains(t, message, `can't give argument to non-function`)
+			assert.ErrorContains(t, htmlErr, message, "html/template")
 
+			// The engine's error is text/template's, prefix included.
+			want := stdlibErr.Error()
 			err := execTextErr(t, "test", tmpl, data)
 			require.Error(t, err, "engine text")
 			assert.Equal(t, want, err.Error(), "engine text")

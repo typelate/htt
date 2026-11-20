@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // stdPositions collects, in source order, the position text/template records
@@ -93,6 +94,48 @@ func TestNameAndKeywordOffsetsMatchTextTemplate(t *testing.T) {
 
 			tree := parseHTML(t, "z", tc.src)
 			require.Equal(t, want, httPositions(t, tree), "html mode offsets for %q", tc.src)
+		})
+	}
+}
+
+func TestNodeStringIsTheSourceSpan(t *testing.T) {
+	tests := []struct {
+		name, text string
+		html       bool
+		want       []string // String of each action, pipe, command and template call, in walk order
+	}{
+		{name: "spaced call", text: `{{  template   "x"}}`, want: []string{`{{  template   "x"}}`}},
+		{name: "newline in call", text: "{{template\n  \"x\"}}", want: []string{"{{template\n  \"x\"}}"}},
+		{name: "trimmed call", text: `{{-  template   "missing" . -}}`, want: []string{`{{-  template   "missing" . -}}`}},
+		{name: "spaced pipeline", text: `{{ .A  |  printf   "%v" }}`, want: []string{`{{ .A  |  printf   "%v" }}`, `.A  |  printf   "%v" }}`, `.A`, `printf   "%v"`}},
+		{name: "spaced if", text: `{{if  .A }}x{{end}}`, want: []string{`.A }}`, `.A`}},
+		{name: "block in html", text: `<p>{{block "x" .}}y{{end}}</p>`, html: true, want: []string{`{{block "x" .}}y{{end}}`}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tree, err := htt.ParseTree("t", "t", test.text, map[string]*htt.Tree{}, lex.Options{LeftDelim: "{{", RightDelim: "}}", ParseHTML: test.html})
+			require.NoError(t, err)
+			var got []string
+			htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
+				switch n := n.(type) {
+				case *htt.ActionNode:
+					got = append(got, n.String(), n.Pipe.String())
+					for _, c := range n.Pipe.Commands {
+						got = append(got, c.String())
+					}
+				case *htt.TemplateNode:
+					got = append(got, n.String())
+				case *htt.BlockNode:
+					got = append(got, n.Call().String())
+				case *htt.IfNode:
+					got = append(got, n.Pipe.String())
+					for _, c := range n.Pipe.Commands {
+						got = append(got, c.String())
+					}
+				}
+			})
+			t.Logf("%q", got)
+			require.Equal(t, test.want, got)
 		})
 	}
 }

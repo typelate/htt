@@ -928,8 +928,6 @@ line 3
 
 // Check that an error from a nested template contains all the relevant information.
 func TestExecError(t *testing.T) {
-	// Changed: the one assertion fails; htt's error has no "template: top:7:20: executing" location.
-	t.Skip("differs from html/template: exec error has no template name, line, column or executing-node prefix; got \"error calling index: index out of range: 5\"")
 	tmpl, err := New("top").Parse(execErrorText)
 	if err != nil {
 		t.Fatal("parse error:", err)
@@ -1375,7 +1373,6 @@ func TestExecuteGivesExecError(t *testing.T) {
 	if err.Error() != alwaysErrorText {
 		t.Errorf("expected %q error; got %q", alwaysErrorText, err)
 	}
-	t.Skip("differs from html/template: a field error is not an ExecError (\"field X in type int\" is returned with no template location)")
 	// This one should be an ExecError.
 	tmpl, err = New("X").Parse("hello, {{.X.Y}}")
 	if err != nil {
@@ -1661,8 +1658,6 @@ func TestInterfaceValues(t *testing.T) {
 
 // Check that panics during calls are recovered and returned as errors.
 func TestExecutePanicDuringCall(t *testing.T) {
-	// Changed: all six rows recover the panic, but the error has no template location prefix.
-	t.Skip("differs from html/template: no \"template: NAME:LINE:COL: executing\" prefix")
 	funcs := map[string]any{
 		"doPanic": func() string {
 			panic("custom panic string")

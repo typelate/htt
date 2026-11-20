@@ -28,6 +28,7 @@ type state struct {
 	trust      TrustFunc
 	plan       Plan
 	instance   string
+	node       Node    // the node being evaluated, which an error is placed on; see at
 	markup     *markup // what the source writes that html.Node cannot hold; nil records nothing
 	// attrSource is set while a control structure in an attribute value
 	// is walked. It holds the text nodes made from the template's own
@@ -146,6 +147,7 @@ func (s *state) buildDocument(dot reflect.Value, frag *HTMLDocumentFragmentNode)
 }
 
 func (s *state) walk(dot reflect.Value, node Node) error {
+	s.at(node)
 	switch n := node.(type) {
 	case *ListNode:
 		return s.walkList(dot, n, false, false)
@@ -180,7 +182,7 @@ func (s *state) walk(dot reflect.Value, node Node) error {
 		// A definition writes nothing where it stands.
 	case *BlockNode:
 		// A block executes as a call of the template it defines.
-		return s.walkTemplateNode(dot, s.tree.newTemplate(n.Start(), n.End(), n.Line, n.Name, n.Pipe), n)
+		return s.walkTemplateNode(dot, n.Call(), n)
 	default:
 		return s.errorf("unknown node: %s", node)
 	}
@@ -314,6 +316,7 @@ func (s *state) walkAction(dot reflect.Value, action *ActionNode) error {
 		// Variable assignment/declaration — no output.
 		return nil
 	}
+	s.at(action)
 	if edited {
 		var arg any
 		if val.IsValid() {
@@ -386,6 +389,7 @@ func (s *state) walkBranch(dot reflect.Value, branch *BranchNode, name string) e
 
 // walkRangeNode handles {{range}} iteration.
 func (s *state) walkRangeNode(dot reflect.Value, r *RangeNode) error {
+	s.at(r)
 	r.BranchNode.openCount.Add(1)
 	val, err := s.evalPipeline(dot, r.Pipe)
 	if err != nil {
@@ -425,6 +429,7 @@ func (s *state) walkRangeNode(dot reflect.Value, r *RangeNode) error {
 // walkTemplateNode runs the template t calls. call is the node the plan
 // names the call by: t itself, or the block that made t.
 func (s *state) walkTemplateNode(dot reflect.Value, t *TemplateNode, call Node) error {
+	s.at(t)
 	t.count.Add(1)
 	if s.depth >= maxExecDepth {
 		return s.errorf("exceeded maximum template depth (%d)", maxExecDepth)
@@ -471,6 +476,7 @@ func (s *state) evalPipeline(dot reflect.Value, pipe *PipeNode) (reflect.Value, 
 	if pipe == nil {
 		return missingVal, nil
 	}
+	s.at(pipe)
 	var value reflect.Value
 	for _, cmd := range pipe.Commands {
 		var err error
@@ -514,6 +520,7 @@ func (s *state) evalCommand(dot reflect.Value, cmd *CommandNode, final reflect.V
 	case *VariableNode:
 		return s.evalVariableNode(dot, n, cmd.Args, final)
 	}
+	s.at(firstWord)
 	notAFunction := len(cmd.Args) > 1 || final.IsValid()
 	if notAFunction {
 		return missingVal, s.errorf("can't give argument to non-function %s", firstWord)
@@ -534,6 +541,7 @@ func (s *state) evalCommand(dot reflect.Value, cmd *CommandNode, final reflect.V
 }
 
 func (s *state) idealConstant(constant *NumberNode) (reflect.Value, error) {
+	s.at(constant)
 	switch {
 	case constant.IsComplex:
 		return reflect.ValueOf(constant.Complex128), nil
@@ -562,10 +570,12 @@ func isRuneInt(s string) bool {
 }
 
 func (s *state) evalFieldNode(dot reflect.Value, field *FieldNode, args []Node, final reflect.Value) (reflect.Value, error) {
-	return s.evalFieldChain(dot, dot, field.Ident, args, final)
+	s.at(field)
+	return s.evalFieldChain(dot, dot, field, field.Ident, args, final)
 }
 
 func (s *state) evalChainNode(dot reflect.Value, chain *ChainNode, args []Node, final reflect.Value) (reflect.Value, error) {
+	s.at(chain)
 	if len(chain.Field) == 0 {
 		return missingVal, s.errorf("internal error: no fields in evalChainNode")
 	}
@@ -573,10 +583,11 @@ func (s *state) evalChainNode(dot reflect.Value, chain *ChainNode, args []Node, 
 	if err != nil {
 		return missingVal, err
 	}
-	return s.evalFieldChain(dot, pipe, chain.Field, args, final)
+	return s.evalFieldChain(dot, pipe, chain, chain.Field, args, final)
 }
 
 func (s *state) evalVariableNode(dot reflect.Value, v *VariableNode, args []Node, final reflect.Value) (reflect.Value, error) {
+	s.at(v)
 	value, err := s.varValue(v.Ident[0])
 	if err != nil {
 		return missingVal, err
@@ -588,29 +599,32 @@ func (s *state) evalVariableNode(dot reflect.Value, v *VariableNode, args []Node
 		}
 		return value, nil
 	}
-	return s.evalFieldChain(dot, value, v.Ident[1:], args, final)
+	return s.evalFieldChain(dot, value, v, v.Ident[1:], args, final)
 }
 
-func (s *state) evalFieldChain(dot, receiver reflect.Value, ident []string, args []Node, final reflect.Value) (reflect.Value, error) {
+// evalFieldChain evaluates .X.Y.Z possibly followed by arguments. node is
+// the field, chain or variable node that holds the names.
+func (s *state) evalFieldChain(dot, receiver reflect.Value, node Node, ident []string, args []Node, final reflect.Value) (reflect.Value, error) {
 	n := len(ident)
 	for i := 0; i < n-1; i++ {
 		var err error
 		// zeroArgSentinel, not nil: evalCall counts len(args)-1
 		// arguments, and nil would count -1 and reject a method that
 		// takes none.
-		receiver, err = s.evalField(dot, ident[i], zeroArgSentinel, missingVal, receiver)
+		receiver, err = s.evalField(dot, ident[i], node, zeroArgSentinel, missingVal, receiver)
 		if err != nil {
 			return missingVal, err
 		}
 	}
-	return s.evalField(dot, ident[n-1], args, final, receiver)
+	return s.evalField(dot, ident[n-1], node, args, final, receiver)
 }
 
 // zeroArgSentinel is the args of a field or method access with no
 // arguments. evalCall takes args[0] for the word itself and never reads it.
 var zeroArgSentinel = []Node{nil}
 
-func (s *state) evalFunction(dot reflect.Value, node *IdentifierNode, cmd *CommandNode, args []Node, final reflect.Value) (reflect.Value, error) {
+func (s *state) evalFunction(dot reflect.Value, node *IdentifierNode, cmd Node, args []Node, final reflect.Value) (reflect.Value, error) {
+	s.at(node)
 	name := node.Ident
 	// The builtin and/or evaluate their arguments lazily, as in
 	// text/template. A user function of either name is an ordinary call,
@@ -658,10 +672,10 @@ func (s *state) evalAndOr(dot reflect.Value, name string, args []Node, final ref
 
 // evalCallBuiltin evaluates the builtin call. The text of the callee, args[1],
 // names it in errors, as in text/template; a call with no callee uses final.
-func (s *state) evalCallBuiltin(dot reflect.Value, cmd *CommandNode, args []Node, final reflect.Value) (reflect.Value, error) {
+func (s *state) evalCallBuiltin(dot reflect.Value, cmd Node, args []Node, final reflect.Value) (reflect.Value, error) {
 	calleeName := final.String()
 	if len(args) > 1 {
-		calleeName = args[1].String()
+		calleeName = errorContextText(args[1])
 	}
 	callee := func(fn reflect.Value, callArgs ...reflect.Value) (reflect.Value, error) {
 		return call(calleeName, fn, callArgs...)
@@ -681,7 +695,7 @@ func (s *state) findFunction(name string) (reflect.Value, bool) {
 	return missingVal, false
 }
 
-func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, final reflect.Value, receiver reflect.Value) (reflect.Value, error) {
+func (s *state) evalField(dot reflect.Value, fieldName string, node Node, args []Node, final reflect.Value, receiver reflect.Value) (reflect.Value, error) {
 	if !receiver.IsValid() {
 		// Nil data has no field; text/template yields no value unless the key is required.
 		if s.missingKey == MissingKeyError {
@@ -703,14 +717,11 @@ func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, fina
 		ptr = ptr.Addr()
 	}
 	if method := ptr.MethodByName(fieldName); method.IsValid() {
-		return s.evalCall(dot, method, nil, fieldName, args, final)
+		return s.evalCall(dot, method, node, fieldName, args, final)
 	}
 	// Try methods on the value itself.
 	if method := receiver.MethodByName(fieldName); method.IsValid() {
-		return s.evalCall(dot, method, nil, fieldName, args, final)
-	}
-	if hasArgs {
-		return missingVal, s.errorf("can't call method/function %q on %s", fieldName, typ)
+		return s.evalCall(dot, method, node, fieldName, args, final)
 	}
 	// A field is reached through the pointer's Elem.
 	structReceiver, isNil := indirect(receiver)
@@ -720,12 +731,21 @@ func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, fina
 	switch structReceiver.Kind() {
 	case reflect.Struct:
 		field, err := s.structField(structReceiver, fieldName, typ)
-		if field.IsValid() || err != nil {
+		if err != nil {
 			return field, err
+		}
+		if field.IsValid() {
+			if hasArgs {
+				return missingVal, s.errorf("%s has arguments but cannot be invoked as function", fieldName)
+			}
+			return field, nil
 		}
 	case reflect.Map:
 		nameVal := reflect.ValueOf(fieldName)
 		if nameVal.Type().AssignableTo(structReceiver.Type().Key()) {
+			if hasArgs {
+				return missingVal, s.errorf("%s is not a method but has arguments", fieldName)
+			}
 			result := structReceiver.MapIndex(nameVal)
 			if result.IsValid() {
 				return result, nil
@@ -765,7 +785,7 @@ func (s *state) structField(v reflect.Value, fieldName string, typ reflect.Type)
 	return v.FieldByName(fieldName), nil
 }
 
-func (s *state) evalCall(dot reflect.Value, fun reflect.Value, cmd *CommandNode, name string, args []Node, final reflect.Value) (reflect.Value, error) {
+func (s *state) evalCall(dot reflect.Value, fun reflect.Value, node Node, name string, args []Node, final reflect.Value) (reflect.Value, error) {
 	typ := fun.Type()
 	numIn := typ.NumIn()
 	numFixed := len(args) - 1 // first arg is the function name itself
@@ -827,6 +847,7 @@ func (s *state) evalCall(dot reflect.Value, fun reflect.Value, cmd *CommandNode,
 
 	result, err := safeCall(fun, argv)
 	if err != nil {
+		s.at(node)
 		return missingVal, s.errorf("error calling %s: %w", name, err)
 	}
 	if result.Type() == reflectValueType {
@@ -838,6 +859,7 @@ func (s *state) evalCall(dot reflect.Value, fun reflect.Value, cmd *CommandNode,
 }
 
 func (s *state) evalArg(dot reflect.Value, typ reflect.Type, n Node) (reflect.Value, error) {
+	s.at(n)
 	switch arg := n.(type) {
 	case *DotNode:
 		return dot, nil
@@ -857,7 +879,7 @@ func (s *state) evalArg(dot reflect.Value, typ reflect.Type, n Node) (reflect.Va
 	case *PipeNode:
 		return s.evalPipeline(dot, arg)
 	case *IdentifierNode:
-		return s.evalFunction(dot, arg, nil, []Node{arg}, missingVal)
+		return s.evalFunction(dot, arg, arg, []Node{arg}, missingVal)
 	case *ChainNode:
 		return s.evalChainNode(dot, arg, zeroArgSentinel, missingVal)
 	case *BoolNode:
@@ -1035,6 +1057,7 @@ func (s *state) varValue(name string) (reflect.Value, error) {
 
 // walkHTMLNode executes one node and returns the html.Nodes it makes.
 func (s *state) walkHTMLNode(dot reflect.Value, node Node) ([]*html.Node, error) {
+	s.at(node)
 	switch n := node.(type) {
 	case *HTMLElementNode:
 		el, err := s.walkHTMLElement(dot, n)
@@ -1082,7 +1105,7 @@ func (s *state) walkHTMLNode(dot reflect.Value, node Node) ([]*html.Node, error)
 		return nil, nil
 	case *BlockNode:
 		// A block executes as a call of the template it defines.
-		return s.walkHTMLTemplate(dot, s.tree.newTemplate(n.Start(), n.End(), n.Line, n.Name, n.Pipe))
+		return s.walkHTMLTemplate(dot, n.Call())
 	case *BreakNode:
 		n.count.Add(1)
 		return nil, breakError{}
@@ -1178,6 +1201,7 @@ func (s *state) walkHTMLElement(dot reflect.Value, elem *HTMLElementNode) (*html
 		// one template opens <main> and another closes it.
 		s.markup.leaveOpen(n)
 	} else if at := s.tagAt(); at != nil && at.part != tagNone {
+		s.at(elem)
 		return nil, s.errorf("</%s> in a tag that htt cannot follow", elem.TagName)
 	}
 	return n, nil
@@ -1195,6 +1219,7 @@ func (s *state) evalAttrNameAction(dot reflect.Value, action *ActionNode) (sourc
 	if len(action.Pipe.Decl) > 0 {
 		return sourceAttr{}, false, nil
 	}
+	s.at(action)
 	text, trust, err := s.htmlActionText(val)
 	if err != nil {
 		return sourceAttr{}, false, err
@@ -1266,10 +1291,12 @@ func (s *state) evalHTMLAttrValueNodes(dot reflect.Value, nodes []Node, quote by
 			val.Write(vn.Text)
 			raw.Write(vn.Text)
 		case *ActionNode:
+			s.at(vn)
 			value, err := s.evalPipeline(dot, vn.Pipe)
 			if err != nil {
 				return err
 			}
+			s.at(vn)
 			if !value.IsValid() {
 				val.WriteString("<no value>")
 				raw.WriteString(escapeAttrText("<no value>", quote))
@@ -1309,6 +1336,7 @@ func (s *state) walkHTMLAction(dot reflect.Value, action *ActionNode) ([]*html.N
 	if len(action.Pipe.Decl) > 0 {
 		return nil, nil
 	}
+	s.at(action)
 	if at := s.tagAt(); at != nil && at.part != tagNone {
 		return s.walkHTMLTagAction(val, at)
 	}
@@ -1433,6 +1461,7 @@ func (s *state) walkHTMLBranch(dot reflect.Value, branch *BranchNode, name strin
 }
 
 func (s *state) walkHTMLRange(dot reflect.Value, r *RangeNode) ([]*html.Node, error) {
+	s.at(r)
 	r.BranchNode.openCount.Add(1)
 	val, err := s.evalPipeline(dot, r.Pipe)
 	if err != nil {
@@ -1474,6 +1503,7 @@ func (s *state) walkHTMLRange(dot reflect.Value, r *RangeNode) ([]*html.Node, er
 }
 
 func (s *state) walkHTMLTemplate(dot reflect.Value, t *TemplateNode) ([]*html.Node, error) {
+	s.at(t)
 	t.count.Add(1)
 	if s.depth >= maxExecDepth {
 		return nil, s.errorf("exceeded maximum template depth (%d)", maxExecDepth)
@@ -1655,6 +1685,7 @@ func (s *state) walkHTMLAttrRange(dot reflect.Value, r *RangeNode) ([]sourceAttr
 func (s *state) walkHTMLAttrList(dot reflect.Value, list *ListNode) ([]sourceAttr, error) {
 	var result []sourceAttr
 	for _, node := range list.Nodes {
+		s.at(node)
 		switch n := node.(type) {
 		case *HTMLAttributeNode:
 			n.count.Add(1)
@@ -1756,9 +1787,13 @@ func validateAttrName(name string) error {
 
 // Error helpers
 
+// at marks the state to be on node n, for error reporting.
+func (s *state) at(n Node) {
+	s.node = n
+}
+
 func (s *state) errorf(format string, args ...any) ExecError {
-	name := s.tree.Name
-	return errorf(name, format, args...)
+	return errorf(s.tree, s.node, format, args...)
 }
 
 // writeError returns the writer's error as it is. text/template strips its

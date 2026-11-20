@@ -154,7 +154,7 @@ func ExecuteDocument(tree *Tree, data any, opts ...Option) (*html.Node, error) {
 			return s.buildDocument(dot, frag)
 		}
 	}
-	return nil, errorf(tree.Name, "tree is not an HTML template")
+	return nil, errorf(tree, nil, "tree is not an HTML template")
 }
 
 // ExecuteElement executes one element of tree and returns its node.

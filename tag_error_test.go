@@ -21,22 +21,22 @@ func TestErrorsInATagWrittenAsText(t *testing.T) {
 		{
 			name: "an element starts",
 			text: `{{define "t"}}<b>x</b>{{end}}<p data-{{.K}}=1 {{template "t"}}>`,
-			want: `<b> in a tag that htt cannot follow`,
+			want: `template: page:1:14: executing "t" at <<b>x</b>>: <b> in a tag that htt cannot follow`,
 		},
 		{
 			name: "an element ends",
 			text: `<b>{{if .K}}<i data-{{.K}}=1 {{end}}</b>`,
-			want: `</b> in a tag that htt cannot follow`,
+			want: `template: page:1:0: executing "page" at <<b>{{if .K}}<i data-{{.K}}=1 {{end}}</b>>: </b> in a tag that htt cannot follow`,
 		},
 		{
 			name: "an action after a quote in an unquoted value",
 			text: `<p data-{{.K}}=a"b{{.V}}>`,
-			want: `an action in a tag that htt cannot follow`,
+			want: `template: page:1:20: executing "page" at <{{.V}}>: an action in a tag that htt cannot follow`,
 		},
 		{
 			name: "a template call among attributes",
 			text: `{{define "t"}}id=x{{end}}<p {{template "t"}}>`,
-			want: `{{template "t"}} in a tag is not supported by htt`,
+			want: `template: page:1:25: executing "page" at <<p {{template "t"}}>>: {{template "t"}} in a tag is not supported by htt`,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
