@@ -48,6 +48,12 @@ func execErrFuncNames() map[string]bool {
 	return names
 }
 
+type execErrNilEmbedded struct{ *execErrInner }
+
+type execErrOuter struct{ execErrNilEmbedded }
+
+func (e *execErrInner) Get() int { return e.F }
+
 type execErrRow struct {
 	name       string
 	text       string
@@ -152,6 +158,9 @@ var execErrRows = []execErrRow{
 	{name: "unicode before action", text: "héllo {{.Missing}}", data: execErrData{}},
 	{name: "trim markers", text: "a  {{- .Missing -}}  b", data: execErrData{}},
 	{name: "comment before action", text: "{{/* c */}}{{.Missing}}", data: execErrData{}},
+	{name: "field through a nil embedded pointer", text: `{{.F}}`, data: execErrNilEmbedded{}},
+	{name: "method through a nil embedded pointer", text: `{{.Get}}`, data: execErrNilEmbedded{}},
+	{name: "field through two levels of nil embedding", text: `{{.F}}`, data: execErrOuter{}},
 }
 
 // runExecErrStd executes text with text/template and returns its error.
@@ -265,6 +274,7 @@ var execErrHTMLWrappers = []struct {
 	{"spaced call in a heading", "extra spaces between arguments", "<h1>\n  {{TEMPLATE}}</h1>"},
 	{"undefined template in a div", "undefined template", "<div class=\"a\">{{TEMPLATE}}</div>"},
 	{"range in a table", "range body", "<table>{{TEMPLATE}}</table>"},
+	{"nil embedded field in a paragraph", "field through a nil embedded pointer", "<p>{{TEMPLATE}}</p>"},
 }
 
 func TestHTMLExecutionErrorsMatchTextTemplate(t *testing.T) {

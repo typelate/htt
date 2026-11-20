@@ -777,12 +777,22 @@ func nilPointerLacksField(p reflect.Value, fieldName string) bool {
 
 // structField returns the field fieldName of the struct v. The value is
 // invalid when v has no field of that name. The error is for a field that
-// exists but is unexported: it is found and then refused, never read.
+// exists but is unexported: it is found and then refused, never read. The
+// error is also for a field reached through a nil embedded pointer, which
+// FieldByIndexErr reports where FieldByName would panic.
 func (s *state) structField(v reflect.Value, fieldName string, typ reflect.Type) (reflect.Value, error) {
-	if sf, ok := v.Type().FieldByName(fieldName); ok && !sf.IsExported() {
+	sf, ok := v.Type().FieldByName(fieldName)
+	if !ok {
+		return missingVal, nil
+	}
+	if !sf.IsExported() {
 		return missingVal, s.errorf("%s is an unexported field of struct type %s", fieldName, typ)
 	}
-	return v.FieldByName(fieldName), nil
+	field, err := v.FieldByIndexErr(sf.Index)
+	if err != nil {
+		return missingVal, s.errorf("%v", err)
+	}
+	return field, nil
 }
 
 func (s *state) evalCall(dot reflect.Value, fun reflect.Value, node Node, name string, args []Node, final reflect.Value) (reflect.Value, error) {

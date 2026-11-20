@@ -1144,16 +1144,7 @@ func TestIssue48215(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Changed: a panic is skipped rather than failed, so the rest of the
-	// test and the other tests in the binary still run.
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Skipf("differs from text/template: panics instead of returning an error: %v", r)
-			}
-		}()
-		err = tmpl.Execute(io.Discard, B{})
-	}()
+	err = tmpl.Execute(io.Discard, B{})
 	// We expect an error, not a panic.
 	if err == nil {
 		t.Fatal("did not get error for nil embedded struct")
