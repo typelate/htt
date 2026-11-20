@@ -16,16 +16,6 @@ import (
 // text/template. The target skips these texts so the fuzzer can go on past
 // them. Each entry is an open finding in production code.
 var diffTextKnown = map[string]string{
-	"{{vfunc 0 0}}":           "a constant that cannot become the parameter's type: htt says wrong type for value, text/template says can't handle",
-	"{{vfunc 0 1}}":           "a constant that cannot become the parameter's type",
-	"{{vfunc 0 2}}":           "a constant that cannot become the parameter's type",
-	"{{stringer 0}}":          "a constant that cannot become the parameter's type",
-	"{{if add true}}{{end}}":  "a bool constant for an int parameter: htt says wrong type for value, text/template says expected integer",
-	"{{if add true }}{{end}}": "a bool constant for an int parameter",
-	"{{if add true}}0{{end}}": "a bool constant for an int parameter",
-	"0{{if add true}}{{end}}": "a bool constant for an int parameter",
-	"1{{if add true}}{{end}}": "a bool constant for an int parameter",
-
 	"{{slice .S 2 0}}":  "slice indexes out of order: htt reports reflect's panic, text/template says invalid slice index",
 	"{{slice .S 2 1}}":  "slice indexes out of order",
 	"{{slice .S 7 0}}":  "slice indexes out of order",

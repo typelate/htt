@@ -899,7 +899,7 @@ func (s *state) evalArg(dot reflect.Value, typ reflect.Type, n Node) (reflect.Va
 	case *ChainNode:
 		return s.evalChainNode(dot, arg, zeroArgSentinel, missingVal)
 	case *BoolNode:
-		return reflect.ValueOf(arg.True), nil
+		return s.evalBoolArg(typ, arg)
 	case *NumberNode:
 		if typ == nil {
 			return s.idealConstant(arg)
@@ -944,8 +944,18 @@ func (s *state) evalNumberArg(typ reflect.Type, n *NumberNode) (reflect.Value, e
 			return missingVal, s.errorf("expected unsigned integer; found %s", n.Text)
 		}
 		value.SetUint(n.Uint64)
+	case reflect.Interface:
+		if typ.NumMethod() == 0 {
+			return s.idealConstant(n)
+		}
+		return missingVal, s.cannotHandle(n.Text, typ)
+	case reflect.Struct:
+		if typ == reflectValueType {
+			return s.idealConstant(n)
+		}
+		return missingVal, s.cannotHandle(n.Text, typ)
 	default:
-		return s.idealConstant(n)
+		return missingVal, s.cannotHandle(n.Text, typ)
 	}
 	return value, nil
 }
@@ -969,8 +979,57 @@ func (s *state) evalStringArg(typ reflect.Type, n *StringNode) (reflect.Value, e
 		value := reflect.New(typ).Elem()
 		value.SetString(n.Text)
 		return value, nil
+	case reflect.Interface:
+		if typ.NumMethod() == 0 {
+			return reflect.ValueOf(n.Text), nil
+		}
+		return missingVal, s.cannotHandle(n.Quoted, typ)
+	case reflect.Struct:
+		if typ == reflectValueType {
+			return reflect.ValueOf(n.Text), nil
+		}
+		return missingVal, s.cannotHandle(n.Quoted, typ)
 	}
-	return reflect.ValueOf(n.Text), nil
+	return missingVal, s.cannotHandle(n.Quoted, typ)
+}
+
+// evalBoolArg converts a bool constant to the parameter's type, as
+// text/template's evalArg does. A kind it does not convert is an error.
+func (s *state) evalBoolArg(typ reflect.Type, n *BoolNode) (reflect.Value, error) {
+	if typ == nil {
+		return reflect.ValueOf(n.True), nil
+	}
+	switch typ.Kind() {
+	case reflect.Bool:
+		value := reflect.New(typ).Elem()
+		value.SetBool(n.True)
+		return value, nil
+	case reflect.Complex64, reflect.Complex128:
+		return missingVal, s.errorf("expected complex; found %t", n.True)
+	case reflect.Float32, reflect.Float64:
+		return missingVal, s.errorf("expected float; found %t", n.True)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return missingVal, s.errorf("expected integer; found %t", n.True)
+	case reflect.String:
+		return missingVal, s.errorf("expected string; found %t", n.True)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return missingVal, s.errorf("expected unsigned integer; found %t", n.True)
+	case reflect.Interface:
+		if typ.NumMethod() == 0 {
+			return reflect.ValueOf(n.True), nil
+		}
+	case reflect.Struct:
+		if typ == reflectValueType {
+			return reflect.ValueOf(n.True), nil
+		}
+	}
+	return missingVal, s.cannotHandle(fmt.Sprint(n.True), typ)
+}
+
+// cannotHandle is the error for a constant that cannot become a parameter of
+// type typ. It is text/template's evalArg message.
+func (s *state) cannotHandle(text string, typ reflect.Type) ExecError {
+	return s.errorf("can't handle %s for arg of type %s", text, typ)
 }
 
 // printValue writes the textual representation of the value to the writer.

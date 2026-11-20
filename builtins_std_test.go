@@ -92,9 +92,9 @@ var pipelineIfaceFuncs = texttemplate.FuncMap{
 	"echo": func(v any) any { return v },
 }
 
-// runPipelineIfaceStd runs input through text/template with pipelineIfaceFuncs.
-func runPipelineIfaceStd(input string, data any) builtinResult {
-	tmpl, err := texttemplate.New("t").Funcs(pipelineIfaceFuncs).Parse(input)
+// runFuncsStd runs input through text/template with funcs.
+func runFuncsStd(input string, data any, funcs texttemplate.FuncMap) builtinResult {
+	tmpl, err := texttemplate.New("t").Funcs(funcs).Parse(input)
 	if err != nil {
 		return builtinResult{stage: "parse", err: err.Error()}
 	}
@@ -105,9 +105,9 @@ func runPipelineIfaceStd(input string, data any) builtinResult {
 	return builtinResult{stage: "", out: b.String()}
 }
 
-// runPipelineIfaceHTT runs input through htt with pipelineIfaceFuncs.
-func runPipelineIfaceHTT(input string, data any) builtinResult {
-	funcs := htt.FuncMap(pipelineIfaceFuncs)
+// runFuncsHTT runs input through htt with fns.
+func runFuncsHTT(input string, data any, fns texttemplate.FuncMap) builtinResult {
+	funcs := htt.FuncMap(fns)
 	set, err := htt.NewText[any]("t").Functions(funcs).Parse(input)
 	if err != nil {
 		return builtinResult{stage: "parse", err: err.Error()}
@@ -142,8 +142,52 @@ func TestPipelineIfaceMatchesTextTemplate(t *testing.T) {
 	}
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
-			checkBuiltinRow(t, "text/template", row, runPipelineIfaceStd(row.input, row.data))
-			checkBuiltinRow(t, "htt", row, runPipelineIfaceHTT(row.input, row.data))
+			checkBuiltinRow(t, "text/template", row, runFuncsStd(row.input, row.data, pipelineIfaceFuncs))
+			checkBuiltinRow(t, "htt", row, runFuncsHTT(row.input, row.data, pipelineIfaceFuncs))
+		})
+	}
+}
+
+// builtinArgV is the struct parameter of argFuncs.
+type builtinArgV struct {
+	N int
+}
+
+// argFuncs take a struct and an interface with a method, which a constant
+// can never become.
+var argFuncs = texttemplate.FuncMap{
+	"argStruct":   func(v builtinArgV) int { return v.N },
+	"argStringer": func(s fmt.Stringer) string { return s.String() },
+	"argInt":      func(i int) int { return i },
+	"argUint":     func(u uint) uint { return u },
+	"argFloat":    func(f float64) float64 { return f },
+	"argComplex":  func(c complex128) complex128 { return c },
+	"argString":   func(s string) string { return s },
+	"argSum":      func(xs ...int) int { return len(xs) },
+}
+
+// TestArgumentMatchesTextTemplate: a constant that cannot become the
+// parameter's type fails with text/template's "can't handle" message, which
+// names the constant and the parameter type, not a type mismatch.
+func TestArgumentMatchesTextTemplate(t *testing.T) {
+	rows := []builtinRow{
+		{name: "number for a struct", input: `{{argStruct 0}}`, stage: "execute", err: "can't handle 0 for arg of type htt_test.builtinArgV"},
+		{name: "string for a struct", input: `{{argStruct "a"}}`, stage: "execute", err: `can't handle "a" for arg of type htt_test.builtinArgV`},
+		{name: "bool for a struct", input: `{{argStruct true}}`, stage: "execute", err: "can't handle true for arg of type htt_test.builtinArgV"},
+		{name: "number for an interface with methods", input: `{{argStringer 0}}`, stage: "execute", err: "can't handle 0 for arg of type fmt.Stringer"},
+		{name: "string for an interface with methods", input: `{{argStringer "a"}}`, stage: "execute", err: `can't handle "a" for arg of type fmt.Stringer`},
+		{name: "bool for an int", input: `{{argInt true}}`, stage: "execute", err: "expected integer; found true"},
+		{name: "bool for an int element of a variadic", input: `{{argSum true}}`, stage: "execute", err: "expected integer; found true"},
+		{name: "bool for a uint", input: `{{argUint true}}`, stage: "execute", err: "expected unsigned integer; found true"},
+		{name: "bool for a float", input: `{{argFloat true}}`, stage: "execute", err: "expected float; found true"},
+		{name: "bool for a complex", input: `{{argComplex true}}`, stage: "execute", err: "expected complex; found true"},
+		{name: "bool for a string", input: `{{argString true}}`, stage: "execute", err: "expected string; found true"},
+		{name: "bool for an interface with methods", input: `{{argStringer true}}`, stage: "execute", err: "can't handle true for arg of type fmt.Stringer"},
+	}
+	for _, row := range rows {
+		t.Run(row.name, func(t *testing.T) {
+			checkBuiltinRow(t, "text/template", row, runFuncsStd(row.input, row.data, argFuncs))
+			checkBuiltinRow(t, "htt", row, runFuncsHTT(row.input, row.data, argFuncs))
 		})
 	}
 }
