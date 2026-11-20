@@ -1607,15 +1607,11 @@ func TestAddrOfIndex(t *testing.T) {
 }
 
 // Changed: rows whose result differs from html/template, keyed by template text.
-// htt calls a func stored in a map[string]any through a non-function error, and
-// gives 0 in an any-typed field a true truth value in and, or and not.
+// htt calls a func stored in a map[string]any through a non-function error.
 var interfaceDiffers = map[string]string{
 	"{{call .Nil 1}}":        `error is "non-function of type interface {}", not "call of nil"`,
 	"{{call .PlusOne 1}}":    `a func held in map[string]any fails with "non-function of type interface {}"`,
 	"{{call .PlusOne .One}}": `a func held in map[string]any fails with "non-function of type interface {}"`,
-	"{{and .Zero true}}":     `and of an int 0 held in an any gives "true", not "0"`,
-	"{{or .Zero false}}":     `or of an int 0 held in an any gives "0", not "false"`,
-	"{{not .Zero}}":          `not of an int 0 held in an any gives "false", not "true"`,
 }
 
 func TestInterfaceValues(t *testing.T) {

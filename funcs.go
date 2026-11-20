@@ -99,7 +99,7 @@ func not(arg reflect.Value) bool {
 }
 
 func truth(arg reflect.Value) bool {
-	t, _ := isTrue(arg)
+	t, _ := isTrue(indirectInterface(arg))
 	return t
 }
 

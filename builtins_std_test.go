@@ -148,3 +148,31 @@ func TestBuiltinComparison(t *testing.T) {
 		{name: "lt negative int and uint", input: `{{lt .NegOne .Uthree}}`, data: data, want: "true"},
 	})
 }
+
+func newBuiltinTruthData() map[string]any {
+	return map[string]any{
+		"Zero":        0,
+		"One":         1,
+		"Nil":         nil,
+		"EmptyString": "",
+		"Slice":       []int{1},
+	}
+}
+
+func TestBuiltinInterfaceTruth(t *testing.T) {
+	data := newBuiltinTruthData()
+	runBuiltinRows(t, []builtinRow{
+		{name: "and zero in any", input: `{{and .Zero true}}`, data: data, want: "0"},
+		{name: "or zero in any", input: `{{or .Zero false}}`, data: data, want: "false"},
+		{name: "not zero in any", input: `{{not .Zero}}`, data: data, want: "true"},
+		{name: "if not zero in any", input: `{{if not .Zero}}yes{{else}}no{{end}}`, data: data, want: "yes"},
+		{name: "and one then zero", input: `{{and .One .Zero}}`, data: data, want: "0"},
+		{name: "or zero then one", input: `{{or .Zero .One}}`, data: data, want: "1"},
+		{name: "not nil interface", input: `{{not .Nil}}`, data: data, want: "true"},
+		{name: "or nil interface", input: `{{or .Nil false}}`, data: data, want: "false"},
+		{name: "not empty string in any", input: `{{not .EmptyString}}`, data: data, want: "true"},
+		{name: "or empty string in any", input: `{{or .EmptyString "x"}}`, data: data, want: "x"},
+		{name: "not non-empty slice in any", input: `{{not .Slice}}`, data: data, want: "false"},
+		{name: "and non-empty slice in any", input: `{{and .Slice true}}`, data: data, want: "true"},
+	})
+}
