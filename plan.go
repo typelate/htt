@@ -8,7 +8,10 @@ import (
 type Plan interface {
 	// Text returns the text to write for n, already trimmed, or false to write n as it is.
 	Text(instance string, n *TextNode) ([]byte, bool)
-	// Action returns how to write the value of n, or false to print it as it is.
+	// Action returns how to write the value of n. An action that writes a value
+	// needs an edit: when it returns false, execution fails with "no escaping
+	// planned" instead of printing the value as it is. A plan with no edit for
+	// an action does not belong to the tree it is run on.
 	Action(instance string, n *ActionNode) (ActionEdit, bool)
 	// Call returns the instance the template called at n runs as, or "" for the callee's own name.
 	Call(instance string, n Node) string

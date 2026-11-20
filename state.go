@@ -289,6 +289,9 @@ func (s *state) walkAction(dot reflect.Value, action *ActionNode) error {
 	edited := false
 	if s.plan != nil && len(action.Pipe.Decl) == 0 {
 		edit, edited = s.plan.Action(s.instance, action)
+		if !edited {
+			return s.errorf("no escaping planned for %s", action)
+		}
 	}
 	if edited && edit.EvalArgs {
 		args, err := s.evalArgs(dot, action.Pipe.Commands[0].Args[1:])

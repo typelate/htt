@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/htt"
@@ -71,13 +72,6 @@ func TestPlanEditsAnActionsOutput(t *testing.T) {
 			want: "<[v]>",
 		},
 		{
-			name: "an action without an edit prints as usual",
-			text: `a{{.}}b`,
-			data: "v",
-			plan: editFor(`{{.x}}`, bracket),
-			want: "avb",
-		},
-		{
 			name: "a variable declaration is not edited and a use is",
 			text: `{{$x := .}}{{$x}}`,
 			data: "v",
@@ -123,6 +117,78 @@ func TestPlanEditsAnActionsOutput(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPlanWithoutAnEditForAnActionFails(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		text      string
+		plan      planFunc
+		wantErr   bool
+		wantWrote string
+		want      string
+	}{
+		{
+			name:      "an action with no edit fails and writes nothing for it",
+			text:      `a{{.A}}b`,
+			plan:      editFor(`{{.B}}`, bracket),
+			wantErr:   true,
+			wantWrote: "a",
+		},
+		{
+			name: "a declaration needs no edit",
+			text: `{{$x := .A}}`,
+			plan: editFor(`{{.B}}`, bracket),
+		},
+		{
+			name: "an assignment needs no edit",
+			text: `{{$x := .A}}{{$x = .A}}`,
+			plan: editFor(`{{.B}}`, bracket),
+		},
+		{
+			name: "an action with an edit is written through it",
+			text: `a{{.A}}b`,
+			plan: editFor(`{{.A}}`, bracket),
+			want: "a[v]b",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			treeSet := make(map[string]*htt.Tree)
+			root, err := htt.ParseTree("root", "root", tt.text, treeSet, lex.Options{})
+			require.NoError(t, err)
+			trees := htt.DefinedTrees(root, treeSet)
+			finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
+				tree, ok := trees[name]
+				return tree, ok
+			})
+
+			var buf bytes.Buffer
+			err = htt.ExecuteTemplate(&buf, root, map[string]any{"A": "v"},
+				htt.WithFinder(finder), htt.WithPlan(tt.plan, ""))
+			if !tt.wantErr {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, buf.String())
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "no escaping planned for {{.A}}")
+			var execErr htt.ExecError
+			require.ErrorAs(t, err, &execErr)
+			assert.Equal(t, "root", execErr.Name)
+			assert.Equal(t, tt.wantWrote, buf.String())
+		})
+	}
+}
+
+func TestTreeWithoutAPlanPrintsActionsAsIs(t *testing.T) {
+	treeSet := make(map[string]*htt.Tree)
+	root, err := htt.ParseTree("root", "root", `a{{.A}}b`, treeSet, lex.Options{})
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	err = htt.ExecuteTemplate(&buf, root, map[string]any{"A": "v"})
+	require.NoError(t, err)
+	assert.Equal(t, "avb", buf.String())
 }
 
 func TestPlanDropsTheLastCommands(t *testing.T) {
@@ -188,9 +254,11 @@ func (f textPlan) Text(instance string, n *htt.TextNode) ([]byte, bool) {
 	return f(instance, n)
 }
 
-// Action leaves every action as it is.
+// Action writes every action's value as fmt prints it, so only text is replaced.
 func (f textPlan) Action(string, *htt.ActionNode) (htt.ActionEdit, bool) {
-	return htt.ActionEdit{}, false
+	return htt.ActionEdit{Funcs: []func(args ...any) string{
+		func(args ...any) string { return fmt.Sprint(args[0]) },
+	}}, true
 }
 
 // Call names no instance.
