@@ -484,6 +484,12 @@ func (s *state) evalPipeline(dot reflect.Value, pipe *PipeNode) (reflect.Value, 
 		if err != nil {
 			return missingVal, err
 		}
+		// A non-nil value of type any continues with the value inside it, as
+		// text/template's evalPipeline does. A nil one stays, since its
+		// Elem is invalid and a later command would read it as no argument.
+		if value.Kind() == reflect.Interface && value.Type().NumMethod() == 0 && !value.IsNil() {
+			value = value.Elem()
+		}
 	}
 	for _, vr := range pipe.Decl {
 		if pipe.IsAssign {

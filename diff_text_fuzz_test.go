@@ -16,13 +16,6 @@ import (
 // text/template. The target skips these texts so the fuzzer can go on past
 // them. Each entry is an open finding in production code.
 var diffTextKnown = map[string]string{
-	"{{($ | echo).X}}": "a pipeline's value of type any is not unwrapped: the field error names interface {}",
-	"{{(0|echo).A}}":   "a pipeline's value of type any is not unwrapped",
-	"{{(0|echo).B}}":   "a pipeline's value of type any is not unwrapped",
-	"0{{(0|echo).A}}":  "a pipeline's value of type any is not unwrapped",
-	"0{{(0|echo).B}}":  "a pipeline's value of type any is not unwrapped",
-	"0{{(0|echo).C}}":  "a pipeline's value of type any is not unwrapped",
-
 	"{{vfunc 0 0}}":           "a constant that cannot become the parameter's type: htt says wrong type for value, text/template says can't handle",
 	"{{vfunc 0 1}}":           "a constant that cannot become the parameter's type",
 	"{{vfunc 0 2}}":           "a constant that cannot become the parameter's type",

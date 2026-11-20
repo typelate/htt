@@ -87,6 +87,67 @@ func runBuiltinRows(t *testing.T, rows []builtinRow) {
 	}
 }
 
+// pipelineIfaceFuncs has echo, which returns its argument with static type any.
+var pipelineIfaceFuncs = texttemplate.FuncMap{
+	"echo": func(v any) any { return v },
+}
+
+// runPipelineIfaceStd runs input through text/template with pipelineIfaceFuncs.
+func runPipelineIfaceStd(input string, data any) builtinResult {
+	tmpl, err := texttemplate.New("t").Funcs(pipelineIfaceFuncs).Parse(input)
+	if err != nil {
+		return builtinResult{stage: "parse", err: err.Error()}
+	}
+	var b strings.Builder
+	if err := tmpl.Execute(&b, data); err != nil {
+		return builtinResult{stage: "execute", out: b.String(), err: err.Error()}
+	}
+	return builtinResult{stage: "", out: b.String()}
+}
+
+// runPipelineIfaceHTT runs input through htt with pipelineIfaceFuncs.
+func runPipelineIfaceHTT(input string, data any) builtinResult {
+	funcs := htt.FuncMap(pipelineIfaceFuncs)
+	set, err := htt.NewText[any]("t").Functions(funcs).Parse(input)
+	if err != nil {
+		return builtinResult{stage: "parse", err: err.Error()}
+	}
+	tree, ok := set.FindTree("t")
+	if !ok {
+		return builtinResult{stage: "parse", err: errors.New("template t not found").Error()}
+	}
+	var b strings.Builder
+	if err := htt.ExecuteTemplate(&b, tree, data, htt.WithFinder(set), htt.WithFuncs(funcs)); err != nil {
+		return builtinResult{stage: "execute", out: b.String(), err: err.Error()}
+	}
+	return builtinResult{stage: "", out: b.String()}
+}
+
+// TestPipelineIfaceMatchesTextTemplate: after a command whose static type is
+// the empty interface, a pipeline continues with the value inside it, as
+// text/template's evalPipeline does.
+func TestPipelineIfaceMatchesTextTemplate(t *testing.T) {
+	data := diffTextValue("s")
+	rows := []builtinRow{
+		{name: "field of pipe through echo", input: `{{($ | echo).S}}`, data: data, want: "s"},
+		{name: "missing field of pipe through echo", input: `{{($ | echo).X}}`, data: data, stage: "execute", err: "can't evaluate field X in type htt_test.diffTextData"},
+		{name: "field of int through echo", input: `{{(0|echo).A}}`, data: data, stage: "execute", err: "can't evaluate field A in type int"},
+		{name: "field of pointer through echo", input: `{{(.P | echo).X}}`, data: data, want: "x"},
+		{name: "map key of pipe through echo", input: `{{(.M | echo).one}}`, data: data, want: "1"},
+		{name: "len of pipe through echo", input: `{{len (.Sl | echo)}}`, data: data, want: "2"},
+		{name: "with on nil pointer through echo", input: `{{with $x := echo .Nil}}a{{else}}b{{end}}`, data: data, want: "b"},
+		{name: "nil interface through echo", input: `{{echo .E}}`, data: data, want: "<no value>"},
+		{name: "parenthesized nil interface through echo", input: `{{(echo .E)}}`, data: data, want: "<no value>"},
+		{name: "type of pipe through echo", input: `{{printf "%T" (echo 1)}}`, data: data, want: "int"},
+	}
+	for _, row := range rows {
+		t.Run(row.name, func(t *testing.T) {
+			checkBuiltinRow(t, "text/template", row, runPipelineIfaceStd(row.input, row.data))
+			checkBuiltinRow(t, "htt", row, runPipelineIfaceHTT(row.input, row.data))
+		})
+	}
+}
+
 type builtinCmpV struct {
 	N int
 }
