@@ -324,7 +324,7 @@ func (s *state) walkAction(dot reflect.Value, action *ActionNode) error {
 		}
 		return s.writeEdit([]any{arg}, edit)
 	}
-	if _, err := s.printValue(s.wr, val); err != nil {
+	if _, err := s.printValue(s.wr, action, val); err != nil {
 		return s.writeError(err)
 	}
 	return nil
@@ -968,7 +968,7 @@ func (s *state) evalStringArg(typ reflect.Type, n *StringNode) (reflect.Value, e
 }
 
 // printValue writes the textual representation of the value to the writer.
-func (s *state) printValue(wr io.Writer, v reflect.Value) (int, error) {
+func (s *state) printValue(wr io.Writer, action *ActionNode, v reflect.Value) (int, error) {
 	// A nil interface with no methods holds no value. One with methods is
 	// a nil value of that type, and text/template prints it as <nil>.
 	if !v.IsValid() || (v.Kind() == reflect.Interface && v.IsNil() && v.Type().NumMethod() == 0) {
@@ -977,9 +977,9 @@ func (s *state) printValue(wr io.Writer, v reflect.Value) (int, error) {
 	if v.Kind() == reflect.Interface && v.IsNil() {
 		return wr.Write([]byte("<nil>"))
 	}
-	iface := printableValue(v)
+	iface := printableValue(v, true)
 	if iface == nil {
-		return 0, s.errorf("can't print %s of type %s", v, v.Type())
+		return 0, s.errorf("can't print %s of type %s", action, v.Type())
 	}
 	text := fmt.Sprint(iface)
 	return wr.Write([]byte(text))
@@ -987,8 +987,10 @@ func (s *state) printValue(wr io.Writer, v reflect.Value) (int, error) {
 
 // printableValue returns what fmt.Sprint should print for v. A pointer is
 // dereferenced, so that a nil one prints "<nil>", unless it implements
-// error or fmt.Stringer: a method on the pointer receiver would be lost.
-func printableValue(v reflect.Value) any {
+// error or fmt.Stringer: a method on the pointer receiver would be lost. In
+// text mode a func or chan value gives nil, as text/template refuses to print
+// it; html/template prints its address, so HTML mode does not pass text.
+func printableValue(v reflect.Value, text bool) any {
 	// A nil interface in a script element reaches here, and has no value
 	// inside to print.
 	v = indirectInterface(v)
@@ -1009,6 +1011,9 @@ func printableValue(v reflect.Value) any {
 	if v.CanAddr() && v.CanInterface() && (reflect.PointerTo(v.Type()).Implements(errorType) || reflect.PointerTo(v.Type()).Implements(stringerType)) {
 		return v.Addr().Interface()
 	}
+	if text && (v.Kind() == reflect.Chan || v.Kind() == reflect.Func) {
+		return nil
+	}
 	if v.CanInterface() {
 		return v.Interface()
 	}
@@ -1027,7 +1032,7 @@ func (s *state) htmlActionText(v reflect.Value) (string, Trust, error) {
 	if v.Kind() == reflect.Interface && v.IsNil() {
 		return "", TrustNone, nil
 	}
-	iface := printableValue(v)
+	iface := printableValue(v, false)
 	if iface == nil {
 		return "", TrustNone, s.errorf("can't print %s of type %s", v, v.Type())
 	}
@@ -1364,7 +1369,7 @@ func (s *state) walkHTMLAction(dot reflect.Value, action *ActionNode) ([]*html.N
 		}
 		return nil, nil
 	}
-	iface := printableValue(val)
+	iface := printableValue(val, false)
 	if iface == nil {
 		inScriptExpr := inScript && action.HTMLContext.JSContext == "expr"
 		if !inScriptExpr {

@@ -1101,7 +1101,7 @@ func TestIssue31810(t *testing.T) {
 	t.Run("printing a function value", func(t *testing.T) {
 		err = tmpl.Execute(&b, f)
 		if err == nil {
-			t.Skip("differs from text/template: printing a func value writes its address and no error")
+			t.Error("expected error; got none")
 		}
 	})
 

@@ -158,6 +158,9 @@ var execErrRows = []execErrRow{
 	{name: "unicode before action", text: "héllo {{.Missing}}", data: execErrData{}},
 	{name: "trim markers", text: "a  {{- .Missing -}}  b", data: execErrData{}},
 	{name: "comment before action", text: "{{/* c */}}{{.Missing}}", data: execErrData{}},
+	{name: "print a func value", text: `{{.}}`, data: func() string { return "result" }},
+	{name: "print a func value in parentheses", text: `{{(.)}}`, data: func() string { return "result" }},
+	{name: "print a chan value", text: `{{.}}`, data: make(chan int)},
 	{name: "field through a nil embedded pointer", text: `{{.F}}`, data: execErrNilEmbedded{}},
 	{name: "method through a nil embedded pointer", text: `{{.Get}}`, data: execErrNilEmbedded{}},
 	{name: "field through two levels of nil embedding", text: `{{.F}}`, data: execErrOuter{}},
@@ -213,15 +216,7 @@ func runExecErrHTT(t *testing.T, row execErrRow, text string, html bool) error {
 // execErrorDivergences lists the rows, by template text, whose htt error
 // differs from text/template's, with the cause. The test fails when a
 // listed row starts to match.
-var execErrorDivergences = map[string]string{
-	`{{.Fn}}`: causePrintFunc,
-}
-
-// causePrintFunc: text/template refuses to print a func or chan value and
-// words the error with the action ("can't print {{.Fn}} of type func()");
-// htt prints it as fmt.Sprint does and succeeds. Printing is not part of
-// this leaf.
-const causePrintFunc = "htt prints a func value where text/template fails with can't print"
+var execErrorDivergences = map[string]string{}
 
 func TestExecutionErrorsMatchTextTemplate(t *testing.T) {
 	for _, row := range execErrRows {
