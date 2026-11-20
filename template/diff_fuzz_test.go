@@ -44,6 +44,10 @@ func FuzzDiffEscape(f *testing.F) {
 		if len(text) > 256 || strings.Contains(text, "{{template") || strings.Contains(text, "{{block") {
 			return
 		}
+		// {{range 2000000000000000}} runs both engines for hours.
+		if hasLongNumber(text) {
+			return
+		}
 		stdTmpl, err := htmltemplate.New("z").Parse(text)
 		if err != nil {
 			return
@@ -215,4 +219,21 @@ func constString(e ast.Expr) (string, bool) {
 		return x + y, ok
 	}
 	return "", false
+}
+
+// hasLongNumber reports whether text holds a run of five or more digits,
+// which a range action could count to.
+func hasLongNumber(text string) bool {
+	run := 0
+	for i := 0; i < len(text); i++ {
+		if text[i] < '0' || text[i] > '9' {
+			run = 0
+			continue
+		}
+		run++
+		if run >= 5 {
+			return true
+		}
+	}
+	return false
 }
