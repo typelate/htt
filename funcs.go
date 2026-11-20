@@ -226,8 +226,8 @@ func indexArg(idx reflect.Value, length int) (int, error) {
 		x = idx.Int()
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		x = int64(idx.Uint())
-	case reflect.Float32, reflect.Float64:
-		x = int64(idx.Float())
+	case reflect.Invalid:
+		return 0, fmt.Errorf("cannot index slice/array with nil")
 	default:
 		return 0, fmt.Errorf("cannot index slice/array with type %s", idx.Type())
 	}

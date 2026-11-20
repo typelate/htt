@@ -16,8 +16,6 @@ import (
 // text/template. The target skips these texts so the fuzzer can go on past
 // them. Each entry is an open finding in production code.
 var diffTextKnown = map[string]string{
-	"{{slice .S .0}}": "a float index: htt slices with it, text/template refuses it",
-
 	"{{index .S 1}}":                  "an index equal to the length: htt says index out of range, text/template reports reflect's panic",
 	"{{with.Sl}}{{index . 2}}{{end}}": "an index equal to the length",
 }

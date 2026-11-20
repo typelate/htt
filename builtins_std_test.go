@@ -205,6 +205,17 @@ func TestSliceIndexOrderMatchesTextTemplate(t *testing.T) {
 	})
 }
 
+// TestIndexArgMatchesTextTemplate: an index must be an integer, as
+// text/template's indexArg requires for index and slice alike.
+func TestIndexArgMatchesTextTemplate(t *testing.T) {
+	runBuiltinRows(t, []builtinRow{
+		{name: "float index of a slice", input: `{{index . .0}}`, data: []int{1, 2}, stage: "execute", err: "cannot index slice/array with type float64"},
+		{name: "float index of a string slice", input: `{{slice . .0}}`, data: "abc", stage: "execute", err: "cannot index slice/array with type float64"},
+		{name: "nil index of a string slice", input: `{{slice . nil}}`, data: "abc", stage: "execute", err: "cannot index slice/array with nil"},
+		{name: "integer index of a slice", input: `{{index . 1}}`, data: []int{1, 2}, want: "2"},
+	})
+}
+
 type builtinCmpV struct {
 	N int
 }
