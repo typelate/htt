@@ -37,15 +37,20 @@ func runHTT(text string, html bool, data any) outcome {
 		BreakOK:    true,
 		ContinueOK: true,
 	}
-	tree, err := htt.ParseTree("z", "z", text, nil, opts)
+	set := make(map[string]*htt.Tree)
+	tree, err := htt.ParseTree("z", "z", text, set, opts)
 	if err != nil {
 		return outcome{"parse", err.Error()}
 	}
 	if html {
 		htt.AnnotateHTMLContexts(tree.Root)
 	}
+	finder := htt.FindTreeFunc(func(name string) (*htt.Tree, bool) {
+		t, ok := set[name]
+		return t, ok
+	})
 	var buf bytes.Buffer
-	if err := htt.ExecuteTemplate(&buf, tree, data); err != nil {
+	if err := htt.ExecuteTemplate(&buf, tree, data, htt.WithFinder(finder)); err != nil {
 		return outcome{"execute", err.Error()}
 	}
 	return outcome{"ok", buf.String()}
@@ -94,6 +99,56 @@ func TestAssignmentToUndeclaredVariable(t *testing.T) {
 				}
 			default:
 				t.Fatalf("text/template failed to parse %q: %s", tc.text, want.text)
+			}
+		})
+	}
+}
+
+func TestReadOfUndefinedVariable(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		text     string
+		html     bool
+		data     any
+		variable string // the undefined variable named in the error, if any
+	}{
+		{name: "declared from itself", text: `{{$x := $x}}`, variable: "$x"},
+		{name: "if declared from itself", text: `{{if $x := $x}}a{{end}}`, variable: "$x"},
+		{name: "with declared from itself", text: `{{with $x := $x}}a{{end}}`, variable: "$x"},
+		{name: "range declared from itself", text: `{{range $i, $x := $x}}a{{end}}`, variable: "$x"},
+		{name: "printf of itself", text: `{{$x := printf "%v" $x}}`, variable: "$x"},
+		{name: "inner read sees outer value", text: `{{$x := 1}}{{$x := $x}}{{$x}}`},
+		{name: "read after declaration", text: `{{$x := 1}}{{$x}}`},
+		{name: "read after closed scope", text: `{{if true}}{{$y := 1}}{{end}}{{$y}}`, variable: "$y"},
+		{name: "template argument never declared", text: `{{template "t" $x}}{{define "t"}}{{.}}{{end}}`, variable: "$x"},
+		{name: "dollar in called template is its dot", text: `{{define "t"}}{{$}}{{end}}{{template "t" 5}}`},
+		{name: "html if declared from itself", text: `<p>{{if $x := $x}}a{{end}}</p>`, html: true, variable: "$x"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			want := runStdText(tc.text, tc.data)
+			got := runHTT(tc.text, tc.html, tc.data)
+
+			if want.stage != got.stage {
+				t.Fatalf("stage for %q = %s (%s), want %s (%s)", tc.text, got.stage, got.text, want.stage, want.text)
+			}
+			switch want.stage {
+			case "parse", "execute":
+				msg := "undefined variable: " + tc.variable
+				if want.stage == "parse" {
+					msg = `undefined variable "` + tc.variable + `"`
+				}
+				if !strings.Contains(want.text, msg) {
+					t.Fatalf("text/template error for %q = %q, want it to contain %q", tc.text, want.text, msg)
+				}
+				if !strings.Contains(got.text, msg) {
+					t.Errorf("htt error for %q = %q, want it to contain %q", tc.text, got.text, msg)
+				}
+			case "ok":
+				if got.text != want.text {
+					t.Errorf("output for %q = %q, want %q", tc.text, got.text, want.text)
+				}
 			}
 		})
 	}

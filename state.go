@@ -574,7 +574,10 @@ func (s *state) evalChainNode(dot reflect.Value, chain *ChainNode, args []Node, 
 }
 
 func (s *state) evalVariableNode(dot reflect.Value, v *VariableNode, args []Node, final reflect.Value) (reflect.Value, error) {
-	value := s.varValue(v.Ident[0])
+	value, err := s.varValue(v.Ident[0])
+	if err != nil {
+		return missingVal, err
+	}
 	if len(v.Ident) == 1 {
 		notAFunction := len(args) > 1 || final.IsValid()
 		if notAFunction {
@@ -987,13 +990,13 @@ func (s *state) setTopVar(n int, value reflect.Value) {
 	s.vars[len(s.vars)-n].value = value
 }
 
-func (s *state) varValue(name string) reflect.Value {
+func (s *state) varValue(name string) (reflect.Value, error) {
 	for i := len(s.vars) - 1; i >= 0; i-- {
 		if s.vars[i].name == name {
-			return s.vars[i].value
+			return s.vars[i].value, nil
 		}
 	}
-	return missingVal
+	return missingVal, s.errorf("undefined variable: %s", name)
 }
 
 // HTML walk methods
