@@ -1244,24 +1244,6 @@ var cmpTests = []cmpTest{
 	{"eq .NonNilMap .NonNilMap", "", false}, // Uncomparable types.
 }
 
-// Changed: rows whose result differs from html/template, keyed by expression.
-// htt's eq rejects pointer, interface and nil-map operands that html/template
-// compares, and accepts int against float64, which html/template refuses.
-var cmpDiffers = map[string]string{
-	"eq .V1 .V2":         "eq of struct values gives \"uncomparable types\"",
-	"eq .Ptr .Ptr":       "eq of pointers gives \"uncomparable types\", not true",
-	"eq .Ptr .NilPtr":    "eq of a pointer and a nil pointer gives \"uncomparable types\", not false",
-	"eq .NilPtr .NilPtr": "eq of nil pointers gives \"uncomparable types\", not true",
-	"eq .Iface1 .Iface1": "eq of interface values gives \"uncomparable types\", not true",
-	"eq .Iface1 .Iface2": "eq of interface values gives \"reflect: call of reflect.Value.Type on zero Value\", not false",
-	"eq .Iface2 .Iface2": "eq of nil interface values gives \"reflect: call of reflect.Value.Type on zero Value\", not true",
-	"eq .Map .Map":       "eq of maps gives \"uncomparable types\", not true",
-	"eq .Map nil":        "eq of a nil map and nil gives \"reflect: call of reflect.Value.Type on zero Value\", not true",
-	"eq nil .Map":        "eq of nil and a nil map gives \"reflect: call of reflect.Value.Type on zero Value\", not true",
-	"eq .Map .NonNilMap": "eq of maps gives \"uncomparable types\", not false",
-	"eq 2 2.0":           "eq of int and float64 succeeds (true), html/template refuses with \"incompatible types for comparison\"",
-}
-
 func TestComparison(t *testing.T) {
 	b := new(strings.Builder)
 	cmpStruct := struct {
@@ -1282,11 +1264,6 @@ func TestComparison(t *testing.T) {
 		Iface1:    b,
 	}
 	for _, test := range cmpTests {
-		// Changed: skip the row by expression; see cmpDiffers.
-		if reason, ok := cmpDiffers[test.expr]; ok {
-			t.Logf("%s: skipped, differs from html/template: %s", test.expr, reason)
-			continue
-		}
 		text := fmt.Sprintf("{{if %s}}true{{else}}false{{end}}", test.expr)
 		tmpl, err := New("empty").Parse(text)
 		if err != nil {

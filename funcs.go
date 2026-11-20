@@ -276,12 +276,49 @@ func eq(arg1 reflect.Value, arg2 ...reflect.Value) (bool, error) {
 		return false, fmt.Errorf("missing argument for comparison")
 	}
 	k1, _ := basicKind(arg1)
-	for _, a := range arg2 {
-		a = indirectInterface(a)
-		k2, _ := basicKind(a)
-		truth, err := doComparison(k1, k2, arg1, a)
-		if err != nil {
-			return false, err
+	for _, arg := range arg2 {
+		arg = indirectInterface(arg)
+		k2, _ := basicKind(arg)
+		truth := false
+		if k1 != k2 {
+			// Special case: integer values compare regardless of the sign of their type.
+			switch {
+			case k1 == intKind && k2 == uintKind:
+				truth = arg1.Int() >= 0 && uint64(arg1.Int()) == arg.Uint()
+			case k1 == uintKind && k2 == intKind:
+				truth = arg.Int() >= 0 && arg1.Uint() == uint64(arg.Int())
+			default:
+				if arg1.IsValid() && arg.IsValid() {
+					return false, fmt.Errorf("incompatible types for comparison: %v and %v", arg1.Type(), arg.Type())
+				}
+			}
+		} else {
+			switch k1 {
+			case boolKind:
+				truth = arg1.Bool() == arg.Bool()
+			case complexKind:
+				truth = arg1.Complex() == arg.Complex()
+			case floatKind:
+				truth = arg1.Float() == arg.Float()
+			case intKind:
+				truth = arg1.Int() == arg.Int()
+			case stringKind:
+				truth = arg1.String() == arg.String()
+			case uintKind:
+				truth = arg1.Uint() == arg.Uint()
+			default:
+				if !canCompare(arg1, arg) {
+					return false, fmt.Errorf("non-comparable types %s: %v, %s: %v", arg1, arg1.Type(), arg.Type(), arg)
+				}
+				if isNil(arg1) || isNil(arg) {
+					truth = isNil(arg) == isNil(arg1)
+				} else {
+					if !arg.Type().Comparable() {
+						return false, fmt.Errorf("non-comparable type %s: %v", arg, arg.Type())
+					}
+					truth = arg1.Interface() == arg.Interface()
+				}
+			}
 		}
 		if truth {
 			return true, nil
@@ -297,10 +334,43 @@ func ne(arg1, arg2 reflect.Value) (bool, error) {
 
 func lt(arg1, arg2 reflect.Value) (bool, error) {
 	arg1 = indirectInterface(arg1)
+	k1, err := basicKind(arg1)
+	if err != nil {
+		return false, err
+	}
 	arg2 = indirectInterface(arg2)
-	k1, _ := basicKind(arg1)
-	k2, _ := basicKind(arg2)
-	return doLt(k1, k2, arg1, arg2)
+	k2, err := basicKind(arg2)
+	if err != nil {
+		return false, err
+	}
+	truth := false
+	if k1 != k2 {
+		// Special case: integer values compare regardless of the sign of their type.
+		switch {
+		case k1 == intKind && k2 == uintKind:
+			truth = arg1.Int() < 0 || uint64(arg1.Int()) < arg2.Uint()
+		case k1 == uintKind && k2 == intKind:
+			truth = arg2.Int() >= 0 && arg1.Uint() < uint64(arg2.Int())
+		default:
+			return false, fmt.Errorf("incompatible types for comparison: %v and %v", arg1.Type(), arg2.Type())
+		}
+	} else {
+		switch k1 {
+		case boolKind, complexKind:
+			return false, fmt.Errorf("invalid type for comparison")
+		case floatKind:
+			truth = arg1.Float() < arg2.Float()
+		case intKind:
+			truth = arg1.Int() < arg2.Int()
+		case stringKind:
+			truth = arg1.String() < arg2.String()
+		case uintKind:
+			truth = arg1.Uint() < arg2.Uint()
+		default:
+			panic("invalid kind")
+		}
+	}
+	return truth, nil
 }
 
 func le(arg1, arg2 reflect.Value) (bool, error) {
@@ -355,77 +425,30 @@ func basicKind(v reflect.Value) (kind, error) {
 	case reflect.String:
 		return stringKind, nil
 	}
-	return invalidKind, fmt.Errorf("uncomparable type %s: %v", v.Type(), v)
+	return invalidKind, fmt.Errorf("invalid type for comparison")
 }
 
-func doComparison(k1, k2 kind, v1, v2 reflect.Value) (bool, error) {
-	if k1 != k2 {
-		switch {
-		case k1 == intKind && k2 == uintKind:
-			return v1.Int() >= 0 && uint64(v1.Int()) == v2.Uint(), nil
-		case k1 == uintKind && k2 == intKind:
-			return v2.Int() >= 0 && v1.Uint() == uint64(v2.Int()), nil
-		case k1 == intKind && k2 == floatKind:
-			return float64(v1.Int()) == v2.Float(), nil
-		case k1 == floatKind && k2 == intKind:
-			return v1.Float() == float64(v2.Int()), nil
-		case k1 == uintKind && k2 == floatKind:
-			return float64(v1.Uint()) == v2.Float(), nil
-		case k1 == floatKind && k2 == uintKind:
-			return v1.Float() == float64(v2.Uint()), nil
-		default:
-			return false, fmt.Errorf("incompatible types for comparison")
-		}
+// isNil reports whether v is the zero reflect.Value, or nil of its type.
+func isNil(v reflect.Value) bool {
+	if !v.IsValid() {
+		return true
 	}
-	switch k1 {
-	case boolKind:
-		return v1.Bool() == v2.Bool(), nil
-	case complexKind:
-		return v1.Complex() == v2.Complex(), nil
-	case floatKind:
-		return v1.Float() == v2.Float(), nil
-	case intKind:
-		return v1.Int() == v2.Int(), nil
-	case stringKind:
-		return v1.String() == v2.String(), nil
-	case uintKind:
-		return v1.Uint() == v2.Uint(), nil
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
 	}
-	return false, fmt.Errorf("uncomparable types")
+	return false
 }
 
-func doLt(k1, k2 kind, v1, v2 reflect.Value) (bool, error) {
-	if k1 != k2 {
-		switch {
-		case k1 == intKind && k2 == uintKind:
-			return v1.Int() < 0 || uint64(v1.Int()) < v2.Uint(), nil
-		case k1 == uintKind && k2 == intKind:
-			return v2.Int() >= 0 && v1.Uint() < uint64(v2.Int()), nil
-		case k1 == intKind && k2 == floatKind:
-			return float64(v1.Int()) < v2.Float(), nil
-		case k1 == floatKind && k2 == intKind:
-			return v1.Float() < float64(v2.Int()), nil
-		case k1 == uintKind && k2 == floatKind:
-			return float64(v1.Uint()) < v2.Float(), nil
-		case k1 == floatKind && k2 == uintKind:
-			return v1.Float() < float64(v2.Uint()), nil
-		default:
-			return false, fmt.Errorf("incompatible types for comparison")
-		}
+// canCompare reports whether v1 and v2 are both the same kind, or one is nil.
+// It is called only for nillable types, or just before an error.
+func canCompare(v1, v2 reflect.Value) bool {
+	k1 := v1.Kind()
+	k2 := v2.Kind()
+	if k1 == k2 {
+		return true
 	}
-	switch k1 {
-	case boolKind, complexKind:
-		return false, fmt.Errorf("< not defined on bool or complex")
-	case floatKind:
-		return v1.Float() < v2.Float(), nil
-	case intKind:
-		return v1.Int() < v2.Int(), nil
-	case stringKind:
-		return v1.String() < v2.String(), nil
-	case uintKind:
-		return v1.Uint() < v2.Uint(), nil
-	}
-	return false, fmt.Errorf("uncomparable types")
+	return k1 == reflect.Invalid || k2 == reflect.Invalid
 }
 
 // prepareArg converts value to typ where it can.
