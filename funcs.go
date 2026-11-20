@@ -132,19 +132,19 @@ func call(name string, fn reflect.Value, args ...reflect.Value) (reflect.Value, 
 	if typ.Kind() != reflect.Func {
 		return reflect.Value{}, fmt.Errorf("non-function %s of type %s", name, typ)
 	}
-	if !goodFunc(typ) {
-		return reflect.Value{}, fmt.Errorf("function called with %d args; should be 1 or 2", typ.NumOut())
+	if err := goodFunc(name, typ); err != nil {
+		return reflect.Value{}, err
 	}
 	numIn := typ.NumIn()
 	var dddType reflect.Type
 	if typ.IsVariadic() {
 		if len(args) < numIn-1 {
-			return reflect.Value{}, fmt.Errorf("wrong number of args: got %d want at least %d", len(args), numIn-1)
+			return reflect.Value{}, fmt.Errorf("wrong number of args for %s: got %d want at least %d", name, len(args), numIn-1)
 		}
 		dddType = typ.In(numIn - 1).Elem()
 	} else {
 		if len(args) != numIn {
-			return reflect.Value{}, fmt.Errorf("wrong number of args: got %d want %d", len(args), numIn)
+			return reflect.Value{}, fmt.Errorf("wrong number of args for %s: got %d want %d", name, len(args), numIn)
 		}
 	}
 	argv := make([]reflect.Value, len(args))
@@ -506,15 +506,20 @@ func canBeNil(typ reflect.Type) bool {
 	return false
 }
 
-// goodFunc reports whether the function has the right return signature.
-func goodFunc(typ reflect.Type) bool {
-	switch {
-	case typ.NumOut() == 1:
-		return true
-	case typ.NumOut() == 2 && typ.Out(1) == errorType:
-		return true
+// goodFunc reports why a function with the return signature typ cannot be
+// called, naming it as name does, or nil if it can. It allows one result, or
+// two where the second is an error, as text/template does.
+func goodFunc(name string, typ reflect.Type) error {
+	switch numOut := typ.NumOut(); {
+	case numOut == 1:
+		return nil
+	case numOut == 2 && typ.Out(1) == errorType:
+		return nil
+	case numOut == 2:
+		return fmt.Errorf("invalid function signature for %s: second return value should be error; is %s", name, typ.Out(1))
+	default:
+		return fmt.Errorf("function %s has %d return values; should be 1 or 2", name, numOut)
 	}
-	return false
 }
 
 var errorType = reflect.TypeFor[error]()

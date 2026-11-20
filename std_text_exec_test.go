@@ -796,11 +796,6 @@ func TestEvalFieldErrors(t *testing.T) {
 				got = err.Error()
 			}
 			if !strings.HasSuffix(got, tc.want) {
-				// Changed: the copied messages name the type as *template.T, which
-				// is the package name in text/template's tests; here it is htt_test.
-				if strings.HasSuffix(got, strings.Replace(tc.want, "*template.", "*htt_test.", 1)) {
-					t.Skip("differs from text/template: the type is named *htt_test.T in this package, not *template.T")
-				}
 				t.Fatalf("got error %q, want %q", got, tc.want)
 			}
 		})
@@ -1044,15 +1039,6 @@ func TestFunctionCheckDuringCall(t *testing.T) {
 		},
 	}
 
-	// Changed: the reasons for the rows htt words differently. Each is skipped
-	// only when that row's message is the one recorded here.
-	differs := map[string]string{
-		"call func with wrong argument":          "differs from text/template: the wrong-argument-count error omits the function name (\"for .BinaryFunc\")",
-		"call variadic func with wrong argument": "differs from text/template: the wrong-argument-count error omits the function name (\"for .VariadicFuncInt\")",
-		"call too few return number func":        "differs from text/template: 0 results are reported as \"function called with 0 args\", and the function name is omitted",
-		"call too many return number func":       "differs from text/template: 3 results are reported as \"function called with 3 args\", and the function name is omitted",
-		"call invalid return type func":          "differs from text/template: a second result that is not error is reported as \"function called with 2 args\", not as an invalid signature",
-	}
 	for _, tc := range tests {
 		// Changed: each row is a subtest, so a skip for one row leaves the others running.
 		t.Run(tc.name, func(t *testing.T) {
@@ -1065,9 +1051,6 @@ func TestFunctionCheckDuringCall(t *testing.T) {
 			if err == nil {
 				t.Errorf("%s: expected error; got none", tc.name)
 			} else if tc.wantErr == "" || !strings.Contains(err.Error(), tc.wantErr) {
-				if reason, ok := differs[tc.name]; ok {
-					t.Skip(reason)
-				}
 				if *debug {
 					fmt.Printf("%s: test execute error: %s\n", tc.name, err)
 				}

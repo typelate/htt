@@ -813,7 +813,7 @@ func (s *state) evalCall(dot reflect.Value, fun reflect.Value, node Node, name s
 			return missingVal, s.errorf("wrong number of args for %s: want at least %d got %d", name, numIn-1, numFixed)
 		}
 	}
-	if !goodFunc(typ) {
+	if goodFunc(name, typ) != nil {
 		return missingVal, s.errorf("can't call %s: invalid return signature", name)
 	}
 
