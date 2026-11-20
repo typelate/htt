@@ -74,6 +74,10 @@ func TestElementTextMatchesHTMLTemplate(t *testing.T) {
 		{name: "html in a pipeline", src: `<p>{{. | html}}</p>`, data: `<+`},
 		{name: "action in a script", src: `<script>var x = {{.}};</script>`, data: "a<+"},
 		{name: "call from an attribute", src: `{{define "u"}}{{.}}{{end}}<a title="{{template "u" .}}">`, data: "+"},
+		{name: "html of nil data", src: `<p>{{html .}}</p>`, data: nil},
+		{name: "html of a nil any field", src: `<p>{{html .E}}</p>`, data: struct{ E any }{}},
+		{name: "html of a nil any field with two arguments", src: `<p>{{html .E .E}}</p>`, data: struct{ E any }{}},
+		{name: "urlquery of a nil any field", src: `<p>{{urlquery .E}}</p>`, data: struct{ E any }{}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			want := runHTMLTemplate(t, tt.src, tt.data)

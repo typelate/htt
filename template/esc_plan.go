@@ -81,6 +81,11 @@ func planPipeline(p *htt.PipeNode, escapers []string) htt.ActionEdit {
 			}
 		}
 	}
+	if edit.EvalArgs {
+		// html/template rewrites {{html a b}} to {{_eval_args_ a b | html}}, so the
+		// arguments are formatted with fmt.Sprint, nil included, before escaping.
+		names = append([]string{"_eval_args_"}, names...)
+	}
 	edit.Funcs = make([]func(args ...any) string, 0, len(names))
 	for _, name := range names {
 		edit.Funcs = append(edit.Funcs, escaperFunc(name))

@@ -787,9 +787,7 @@ func mapOfThree() any {
 
 // Changed: rows whose output differs from html/template, keyed by row name.
 // testExecute logs and skips each one; the reason follows "differs from html/template: ".
-var execDiffers = map[string]string{
-	"html untyped nil": `html of an untyped nil field gives "&lt;no value&gt;", not "&lt;nil&gt;"`,
-}
+var execDiffers = map[string]string{}
 
 func testExecute(execTests []execTest, template *Template, t *testing.T) {
 	b := new(strings.Builder)
