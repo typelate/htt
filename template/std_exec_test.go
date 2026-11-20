@@ -1480,12 +1480,7 @@ func TestStdBlock(t *testing.T) {
 }
 
 // Changed: subtests whose error text differs from html/template, keyed by name.
-var evalFieldDiffers = map[string]string{
-	"MissingFieldOnNil":     `error is "nil pointer evaluating field MissingField in type *template.T", not "can't evaluate field MissingField in type *template.T"`,
-	"ExistingFieldOnNil":    `error is "nil pointer evaluating field X in type *template.T", not "nil pointer evaluating *template.T.X"`,
-	"MissingKeyOnNilMap":    `error is "nil pointer evaluating field MissingKey in type *map[string]string", not "nil pointer evaluating *map[string]string.MissingKey"`,
-	"MissingKeyOnNilMapPtr": `error is "nil pointer evaluating field MissingKey in type *map[string]string", not "nil pointer evaluating *map[string]string.MissingKey"`,
-}
+var evalFieldDiffers = map[string]string{}
 
 func TestEvalFieldErrors(t *testing.T) {
 	tests := []struct {
@@ -1666,9 +1661,8 @@ func TestInterfaceValues(t *testing.T) {
 
 // Check that panics during calls are recovered and returned as errors.
 func TestExecutePanicDuringCall(t *testing.T) {
-	// Changed: all six rows recover the panic, but the error has no template location prefix,
-	// and the nil-interface method call words its error differently.
-	t.Skip("differs from html/template: recovered-panic errors have no \"template: t:L:C: executing ...\" prefix; the nil-interface method call says \"nil pointer evaluating field Method0 in type template.I\"")
+	// Changed: all six rows recover the panic, but the error has no template location prefix.
+	t.Skip("differs from html/template: no \"template: NAME:LINE:COL: executing\" prefix")
 	funcs := map[string]any{
 		"doPanic": func() string {
 			panic("custom panic string")

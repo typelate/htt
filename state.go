@@ -693,7 +693,7 @@ func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, fina
 	receiver, isNil := indirect(receiver)
 	// A method call on a nil interface would panic in MethodByName.
 	if receiver.Kind() == reflect.Interface && isNil {
-		return missingVal, s.errorf("nil pointer evaluating field %s in type %s", fieldName, typ)
+		return missingVal, s.errorf("nil pointer evaluating %s.%s", typ, fieldName)
 	}
 	hasArgs := len(args) > 1 || final.IsValid()
 
@@ -714,8 +714,8 @@ func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, fina
 	}
 	// A field is reached through the pointer's Elem.
 	structReceiver, isNil := indirect(receiver)
-	if isNil {
-		return missingVal, s.errorf("nil pointer evaluating field %s in type %s", fieldName, typ)
+	if isNil && !nilPointerLacksField(structReceiver, fieldName) {
+		return missingVal, s.errorf("nil pointer evaluating %s.%s", typ, fieldName)
 	}
 	switch structReceiver.Kind() {
 	case reflect.Struct:
@@ -742,6 +742,17 @@ func (s *state) evalField(dot reflect.Value, fieldName string, args []Node, fina
 	default:
 	}
 	return missingVal, s.errorf("can't evaluate field %s in type %s", fieldName, typ)
+}
+
+// nilPointerLacksField reports whether p is a nil pointer to a struct with no
+// field fieldName. text/template words that access "can't evaluate", not "nil
+// pointer evaluating", because the field could never be read.
+func nilPointerLacksField(p reflect.Value, fieldName string) bool {
+	if p.Kind() != reflect.Pointer || p.Type().Elem().Kind() != reflect.Struct {
+		return false
+	}
+	_, ok := p.Type().Elem().FieldByName(fieldName)
+	return !ok
 }
 
 // structField returns the field fieldName of the struct v. The value is

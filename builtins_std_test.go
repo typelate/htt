@@ -246,6 +246,25 @@ func TestBuiltinWriterError(t *testing.T) {
 	}
 }
 
+type builtinNilT struct {
+	X int
+}
+
+type builtinNilHolder struct {
+	I fmt.Stringer
+}
+
+// TestBuiltinNilFieldErrors: a field or key read through a nil pointer or a nil
+// interface fails with text/template's wording.
+func TestBuiltinNilFieldErrors(t *testing.T) {
+	runBuiltinRows(t, []builtinRow{
+		{name: "missing field on nil pointer", input: `{{.MissingField}}`, data: (*builtinNilT)(nil), stage: "execute", err: "can't evaluate field MissingField in type *htt_test.builtinNilT"},
+		{name: "field on nil pointer", input: `{{.X}}`, data: (*builtinNilT)(nil), stage: "execute", err: "nil pointer evaluating *htt_test.builtinNilT.X"},
+		{name: "key on nil map pointer", input: `{{.MissingKey}}`, data: (*map[string]string)(nil), stage: "execute", err: "nil pointer evaluating *map[string]string.MissingKey"},
+		{name: "method on nil interface field", input: `{{.I.String}}`, data: builtinNilHolder{}, stage: "execute", err: "nil pointer evaluating fmt.Stringer.String"},
+	})
+}
+
 func TestBuiltinReflectValueData(t *testing.T) {
 	runBuiltinRows(t, []builtinRow{
 		{name: "range over reflect.Value data", input: `{{range .}}{{.String}}{{end}}`, data: reflect.ValueOf([]builtinStrV{{N: 1}}), want: "<1>"},
