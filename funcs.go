@@ -219,6 +219,9 @@ func index(item reflect.Value, indexes ...reflect.Value) (reflect.Value, error) 
 	return item, nil
 }
 
+// indexArg converts idx to an int no greater than length, as text/template's
+// indexArg does. An index equal to length passes, and the indexing that
+// follows panics; safeCall reports that panic as the call's error.
 func indexArg(idx reflect.Value, length int) (int, error) {
 	var x int64
 	switch idx.Kind() {
@@ -231,7 +234,7 @@ func indexArg(idx reflect.Value, length int) (int, error) {
 	default:
 		return 0, fmt.Errorf("cannot index slice/array with type %s", idx.Type())
 	}
-	if x < 0 || int(x) >= length {
+	if x < 0 || int(x) > length {
 		return 0, fmt.Errorf("index out of range: %d", x)
 	}
 	return int(x), nil
@@ -265,7 +268,7 @@ func slice(item reflect.Value, indexes ...reflect.Value) (reflect.Value, error) 
 	// Set defaults
 	idx := [3]int{0, item.Len(), cap}
 	for i, idxVal := range indexes {
-		x, err := indexArg(idxVal, cap+1)
+		x, err := indexArg(idxVal, cap)
 		if err != nil {
 			return reflect.Value{}, err
 		}

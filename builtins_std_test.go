@@ -206,13 +206,21 @@ func TestSliceIndexOrderMatchesTextTemplate(t *testing.T) {
 }
 
 // TestIndexArgMatchesTextTemplate: an index must be an integer, as
-// text/template's indexArg requires for index and slice alike.
+// text/template's indexArg requires for index and slice alike. An index equal
+// to the length gets past indexArg, and reflect's panic in index is what
+// fails, as text/template's call recovery reports it.
 func TestIndexArgMatchesTextTemplate(t *testing.T) {
 	runBuiltinRows(t, []builtinRow{
 		{name: "float index of a slice", input: `{{index . .0}}`, data: []int{1, 2}, stage: "execute", err: "cannot index slice/array with type float64"},
 		{name: "float index of a string slice", input: `{{slice . .0}}`, data: "abc", stage: "execute", err: "cannot index slice/array with type float64"},
 		{name: "nil index of a string slice", input: `{{slice . nil}}`, data: "abc", stage: "execute", err: "cannot index slice/array with nil"},
 		{name: "integer index of a slice", input: `{{index . 1}}`, data: []int{1, 2}, want: "2"},
+		{name: "index at the length of a string", input: `{{index . 1}}`, data: "0", stage: "execute", err: "reflect: string index out of range"},
+		{name: "index at the length of a slice", input: `{{index . 2}}`, data: []int{1, 2}, stage: "execute", err: "reflect: slice index out of range"},
+		{name: "index at the length of an array", input: `{{index . 2}}`, data: [2]int{1, 2}, stage: "execute", err: "reflect: array index out of range"},
+		{name: "index past the length of a slice", input: `{{index . 3}}`, data: []int{1, 2}, stage: "execute", err: "index out of range: 3"},
+		{name: "index into an empty slice", input: `{{index . 1}}`, data: []int{}, stage: "execute", err: "index out of range: 1"},
+		{name: "slice one past the end of a string", input: `{{slice . 2}}`, data: "0", stage: "execute", err: "index out of range: 2"},
 	})
 }
 

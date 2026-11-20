@@ -15,10 +15,7 @@ import (
 // diffTextKnown maps a template text to the cause of its divergence from
 // text/template. The target skips these texts so the fuzzer can go on past
 // them. Each entry is an open finding in production code.
-var diffTextKnown = map[string]string{
-	"{{index .S 1}}":                  "an index equal to the length: htt says index out of range, text/template reports reflect's panic",
-	"{{with.Sl}}{{index . 2}}{{end}}": "an index equal to the length",
-}
+var diffTextKnown = map[string]string{}
 
 // diffTextFuncs is execTestFuncs without count. count slices a 16-byte string
 // in a goroutine of its own for n above 16, and no recover in the target can
