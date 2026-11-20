@@ -979,7 +979,7 @@ func (s *state) printValue(wr io.Writer, action *ActionNode, v reflect.Value) (i
 	}
 	iface := printableValue(v, true)
 	if iface == nil {
-		return 0, s.errorf("can't print %s of type %s", action, v.Type())
+		return 0, s.errorf("can't print %s of type %s", errorContextText(action), v.Type())
 	}
 	text := fmt.Sprint(iface)
 	return wr.Write([]byte(text))
