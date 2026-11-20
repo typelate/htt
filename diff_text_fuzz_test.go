@@ -16,14 +16,6 @@ import (
 // text/template. The target skips these texts so the fuzzer can go on past
 // them. Each entry is an open finding in production code.
 var diffTextKnown = map[string]string{
-	"{{slice .S 2 0}}":  "slice indexes out of order: htt reports reflect's panic, text/template says invalid slice index",
-	"{{slice .S 2 1}}":  "slice indexes out of order",
-	"{{slice .S 7 0}}":  "slice indexes out of order",
-	"{{slice .S 7 1}}":  "slice indexes out of order",
-	"{{slice .S 02 0}}": "slice indexes out of order",
-	"{{slice .S 1 00}}": "slice indexes out of order",
-	"{{slice .S 1 0}}0": "slice indexes out of order",
-
 	"{{slice .S .0}}": "a float index: htt slices with it, text/template refuses it",
 
 	"{{index .S 1}}":                  "an index equal to the length: htt says index out of range, text/template reports reflect's panic",

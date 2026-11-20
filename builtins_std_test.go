@@ -192,6 +192,19 @@ func TestArgumentMatchesTextTemplate(t *testing.T) {
 	}
 }
 
+// TestSliceIndexOrderMatchesTextTemplate: indexes out of order fail with
+// text/template's "invalid slice index" message, not a reflect panic.
+func TestSliceIndexOrderMatchesTextTemplate(t *testing.T) {
+	runBuiltinRows(t, []builtinRow{
+		{name: "string indexes out of order", input: `{{slice . 2 1}}`, data: "abcdefg", stage: "execute", err: "invalid slice index: 2 > 1"},
+		{name: "string index past the length, first", input: `{{slice . 7 0}}`, data: "abcdefg", stage: "execute", err: "invalid slice index: 7 > 0"},
+		{name: "three indexes, first above second", input: `{{slice . 3 1 4}}`, data: []int{1, 2, 3, 4}, stage: "execute", err: "invalid slice index: 3 > 1"},
+		{name: "three indexes, second above third", input: `{{slice . 1 3 2}}`, data: []int{1, 2, 3, 4}, stage: "execute", err: "invalid slice index: 3 > 2"},
+		{name: "equal indexes", input: `{{slice . 2 2}}`, data: "abcdefg", want: ""},
+		{name: "ordered indexes", input: `{{slice . 1 3}}`, data: "abcdefg", want: "bc"},
+	})
+}
+
 type builtinCmpV struct {
 	N int
 }

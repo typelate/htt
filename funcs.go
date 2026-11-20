@@ -271,8 +271,16 @@ func slice(item reflect.Value, indexes ...reflect.Value) (reflect.Value, error) 
 		}
 		idx[i] = x
 	}
+	// Given item[i:j], i must not be above j, as text/template checks it.
+	if idx[0] > idx[1] {
+		return reflect.Value{}, fmt.Errorf("invalid slice index: %d > %d", idx[0], idx[1])
+	}
 	if len(indexes) < 3 {
 		return item.Slice(idx[0], idx[1]), nil
+	}
+	// Given item[i:j:k], j must not be above k.
+	if idx[1] > idx[2] {
+		return reflect.Value{}, fmt.Errorf("invalid slice index: %d > %d", idx[1], idx[2])
 	}
 	return item.Slice3(idx[0], idx[1], idx[2]), nil
 }
