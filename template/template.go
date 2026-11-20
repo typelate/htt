@@ -263,22 +263,38 @@ func (t *Template) parseShadow(text string, replaced map[string]bool) error {
 
 // AddParseTree adds tree to t's set under name and returns its template.
 // A tree parsed without HTML structure is escaped as html/template escapes a
-// parse tree added that way. A tree with HTML structure is kept for
-// inspection and annotated in place; executing it is an error. An empty tree
+// parse tree added that way. A tree with HTML structure that is the tree of
+// a template in t's set runs with that template's text form. Any other tree
+// with HTML structure is kept for inspection and annotated in place;
+// executing it is an error. An empty tree
 // does not replace a definition.
 func (t *Template) AddParseTree(name string, tree *htt.Tree) (*Template, error) {
 	if err := t.checkCanParse(); err != nil {
 		return nil, err
 	}
+	shadow := tree
 	if tree.HTMLMode {
 		htt.AnnotateHTMLContexts(tree.Root)
+		shadow = t.shadowOf(tree)
 	}
 	tmpl, replaced := t.addTree(name, tree)
-	if replaced && !tree.HTMLMode {
-		t.common.shadow[name] = tree
+	if replaced {
+		t.common.shadow[name] = shadow
 	}
 	t.common.esc = new(escapeSet)
 	return tmpl, nil
+}
+
+// shadowOf returns the text tree of the template of t's set whose tree is
+// tree, or nil when no such template has one. A tree with HTML structure
+// from outside the set has no text form.
+func (t *Template) shadowOf(tree *htt.Tree) *htt.Tree {
+	for name, body := range t.common.bodies {
+		if body == tree && t.common.shadow[name] != nil {
+			return t.common.shadow[name]
+		}
+	}
+	return nil
 }
 
 // addTree adds tree to t's set under name, without a shadow, and reports

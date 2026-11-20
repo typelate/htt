@@ -393,8 +393,6 @@ func TestOrphanedTemplate(t *testing.T) {
 
 // Covers issue 21844.
 func TestAliasedParseTreeDoesNotOverescape(t *testing.T) {
-	// Changed: AddParseTree refuses a tree with HTML structure, so the test stops at the add.
-	t.Skip("differs from html/template: AddParseTree(\"bar\", tree) fails with \"html/template:bar: \\\"bar\\\" was added from a tree with HTML structure and has no text form to escape\"")
 	const (
 		tmplText = `{{.}}`
 		data     = `<baz>`
