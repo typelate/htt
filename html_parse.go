@@ -86,6 +86,8 @@ func (t *Tree) htmlParse() error {
 	var n Node = frag
 	t.Root.Nodes = append(t.Root.Nodes, n)
 	t.Root.end = lex.Pos(len(t.text))
+	t.checkUnescapedAmpersands(t.Root)
+	t.Diagnostics.SortByPos()
 	return nil
 }
 

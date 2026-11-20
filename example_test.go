@@ -46,6 +46,19 @@ func ExampleTree_diagnostics() {
 	// page.gohtml:1:7 orphan-end-tag unmatched </b> is ignored by browsers
 }
 
+func ExampleTree_unescapedAmpersand() {
+	tree, err := htt.ParseTree("page.gohtml", "page", `<a href="/search?x=1&{{.Key}}={{.Value}}">go</a>`, nil, lex.NewOptions())
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	for _, d := range tree.Diagnostics {
+		fmt.Println(tree.PositionAt(d.Pos), d.Code, d.Message)
+	}
+	// Output:
+	// page.gohtml:1:21 unescaped-ampersand & before an action starts a character reference its value can complete; write &amp;
+}
+
 func ExampleExecuteTemplate() {
 	tree, err := htt.ParseTree("page.gohtml", "page", `<a href="{{.URL}}">{{.Title}}</a>`, nil, lex.NewOptions())
 	if err != nil {

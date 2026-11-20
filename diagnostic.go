@@ -31,18 +31,19 @@ func (s Severity) String() string {
 // DiagnosticCode names a class of finding. Codes are stable.
 type DiagnosticCode string
 
-// The codes for HTML structure. The parser reports DiagOrphanEndTag and
-// DiagMisnestedTag; the others are for analyses built on the tree. An
-// analysis of anything else declares its own codes.
+// The codes for HTML structure. The parser reports DiagOrphanEndTag,
+// DiagMisnestedTag and DiagUnescapedAmpersand; the others are for analyses
+// built on the tree. An analysis of anything else declares its own codes.
 const (
-	DiagUnclosedElement DiagnosticCode = "unclosed-element"
-	DiagOrphanEndTag    DiagnosticCode = "orphan-end-tag"
-	DiagMisnestedTag    DiagnosticCode = "misnested-tag"    // adoption agency (WHATWG §13.2.6.4.7)
-	DiagFosteredContent DiagnosticCode = "fostered-content" // foster parenting (§13.2.6.4.9)
-	DiagNestedForm      DiagnosticCode = "nested-form"      // §13.2.6.4.7 form pointer
-	DiagAutoClosed      DiagnosticCode = "auto-closed"      // implied end tags (§13.2.6.3)
-	DiagNestedLink      DiagnosticCode = "nested-link"
-	DiagNestedButton    DiagnosticCode = "nested-button"
+	DiagUnclosedElement    DiagnosticCode = "unclosed-element"
+	DiagOrphanEndTag       DiagnosticCode = "orphan-end-tag"
+	DiagMisnestedTag       DiagnosticCode = "misnested-tag"    // adoption agency (WHATWG §13.2.6.4.7)
+	DiagFosteredContent    DiagnosticCode = "fostered-content" // foster parenting (§13.2.6.4.9)
+	DiagNestedForm         DiagnosticCode = "nested-form"      // §13.2.6.4.7 form pointer
+	DiagAutoClosed         DiagnosticCode = "auto-closed"      // implied end tags (§13.2.6.3)
+	DiagNestedLink         DiagnosticCode = "nested-link"
+	DiagNestedButton       DiagnosticCode = "nested-button"
+	DiagUnescapedAmpersand DiagnosticCode = "unescaped-ampersand"
 )
 
 // Diagnostic is a finding that does not stop the parse: a place where a
@@ -78,6 +79,7 @@ func (t *Tree) diag(pos, end lex.Pos, sev Severity, code DiagnosticCode, format 
 
 // Message formats.
 const (
-	msgOrphanEndTag   = `unmatched </%s> is ignored by browsers`
-	msgMisnestedClose = `</%s> also closes <%s>; browsers reopen a copy of <%s> after it`
+	msgOrphanEndTag       = `unmatched </%s> is ignored by browsers`
+	msgMisnestedClose     = `</%s> also closes <%s>; browsers reopen a copy of <%s> after it`
+	msgUnescapedAmpersand = `& before an action starts a character reference its value can complete; write &amp;`
 )
