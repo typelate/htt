@@ -104,16 +104,19 @@ func (t *Template) Name() string {
 
 // New returns an undefined template named name in t's set.
 func (t *Template) New(name string) *Template {
-	// As html/template does, a template already named name is emptied: it
-	// is orphaned, and executing it fails. The set's body for name stays.
-	if existing := t.common.tmpl[name]; existing != nil {
-		existing.Tree = nil
+	// As html/template does, a template already named name is reset to an
+	// empty template in a set of its own: it is orphaned, executing it
+	// fails, and parsing it leaves t's set alone. The set's body for name
+	// stays. t may be the orphan itself, so the set is taken before any reset.
+	set := t.common
+	if existing := set.tmpl[name]; existing != nil {
+		*existing = *New(existing.name)
 	}
 	nt := &Template{
 		name:   name,
-		common: t.common,
+		common: set,
 	}
-	t.common.tmpl[name] = nt
+	set.tmpl[name] = nt
 	return nt
 }
 
