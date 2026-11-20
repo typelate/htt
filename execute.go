@@ -122,8 +122,8 @@ func ExecuteTemplate(w io.Writer, tree *Tree, data any, opts ...Option) error {
 		plan:       cfg.plan,
 		instance:   cfg.instance,
 	}
-	s.vars = []variable{{"$", reflect.ValueOf(data)}}
-	return s.execute(reflect.ValueOf(data))
+	s.vars = []variable{{"$", dataValue(data)}}
+	return s.execute(dataValue(data))
 }
 
 // ExecuteDocument executes the top-level tree of an HTML-mode parse and
@@ -143,7 +143,7 @@ func ExecuteDocument(tree *Tree, data any, opts ...Option) (*html.Node, error) {
 		plan:       cfg.plan,
 		instance:   cfg.instance,
 	}
-	dot := reflect.ValueOf(data)
+	dot := dataValue(data)
 	s.vars = []variable{{"$", dot}}
 	root := tree.Root
 	if root == nil {
@@ -173,8 +173,17 @@ func ExecuteElement(tree *Tree, elem *HTMLElementNode, data any, opts ...Option)
 		plan:       cfg.plan,
 		instance:   cfg.instance,
 	}
-	s.vars = []variable{{"$", reflect.ValueOf(data)}}
-	return s.walkHTMLElement(reflect.ValueOf(data), elem)
+	s.vars = []variable{{"$", dataValue(data)}}
+	return s.walkHTMLElement(dataValue(data), elem)
+}
+
+// dataValue returns the value an execution starts from. A reflect.Value given
+// as data is the value it wraps, as in text/template.
+func dataValue(data any) reflect.Value {
+	if v, ok := data.(reflect.Value); ok {
+		return v
+	}
+	return reflect.ValueOf(data)
 }
 
 func htmlAtom(tagName string) atom.Atom {

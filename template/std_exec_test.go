@@ -1572,12 +1572,6 @@ func TestMaxExecDepth(t *testing.T) {
 	}
 }
 
-// Changed: rows that fail on htt with a reflect.Value as data, keyed by template text.
-var addrOfIndexDiffers = map[string]string{
-	"{{range .}}{{.String}}{{end}}":        `htt fails with "range can't iterate over <[]template.V Value>"`,
-	"{{with index . 0}}{{.String}}{{end}}": `htt fails with "error calling index: can't index item of type reflect.Value"`,
-}
-
 func TestAddrOfIndex(t *testing.T) {
 	// golang.org/issue/14916.
 	// Before index worked on reflect.Values, the .String could not be
@@ -1589,11 +1583,6 @@ func TestAddrOfIndex(t *testing.T) {
 		`{{with index . 0}}{{.String}}{{end}}`,
 	}
 	for _, text := range texts {
-		// Changed: htt does not unwrap a reflect.Value passed as data, so both rows fail; see addrOfIndexDiffers.
-		if reason, ok := addrOfIndexDiffers[text]; ok {
-			t.Logf("%s: skipped, differs from html/template: %s", text, reason)
-			continue
-		}
 		tmpl := Must(New("tmpl").Parse(text))
 		var buf strings.Builder
 		err := tmpl.Execute(&buf, reflect.ValueOf([]V{{1}}))

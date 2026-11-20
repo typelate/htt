@@ -3,6 +3,7 @@ package htt_test
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	texttemplate "text/template"
@@ -195,5 +196,21 @@ func TestBuiltinCallInterface(t *testing.T) {
 		{name: "call func in any with field arg", input: `{{call .PlusOne .One}}`, data: data, want: "2"},
 		{name: "call nil in any", input: `{{call .Nil 1}}`, data: data, stage: "execute", err: "call of nil"},
 		{name: "call int in any", input: `{{call .Zero 1}}`, data: data, stage: "execute", err: "non-function .Zero of type int"},
+	})
+}
+
+type builtinStrV struct {
+	N int
+}
+
+func (v *builtinStrV) String() string {
+	return fmt.Sprintf("<%d>", v.N)
+}
+
+func TestBuiltinReflectValueData(t *testing.T) {
+	runBuiltinRows(t, []builtinRow{
+		{name: "range over reflect.Value data", input: `{{range .}}{{.String}}{{end}}`, data: reflect.ValueOf([]builtinStrV{{N: 1}}), want: "<1>"},
+		{name: "index of reflect.Value data", input: `{{with index . 0}}{{.String}}{{end}}`, data: reflect.ValueOf([]builtinStrV{{N: 1}}), want: "<1>"},
+		{name: "len of reflect.Value data", input: `{{len .}}`, data: reflect.ValueOf([]builtinStrV{{N: 1}}), want: "1"},
 	})
 }
