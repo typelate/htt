@@ -167,17 +167,36 @@ func (t *Template) Funcs(funcMap FuncMap) *Template {
 		t.common.funcMap = make(htt.FuncMap)
 	}
 	for k, v := range funcMap {
-		// As text/template's addValueFuncs does, a bad name or value panics.
+		// As text/template's addValueFuncs does, a bad name, value or result
+		// signature panics.
 		if !goodFuncName(k) {
 			panic(fmt.Errorf("function name %q is not a valid identifier", k))
 		}
 		if reflect.ValueOf(v).Kind() != reflect.Func {
 			panic("value for " + k + " not a function")
 		}
+		if err := goodFunc(k, reflect.TypeOf(v)); err != nil {
+			panic(err)
+		}
 		t.common.funcMap[k] = v
 	}
 	t.common.esc = new(escapeSet)
 	return t
+}
+
+// goodFunc reports whether a function named name has a result shape that
+// text/template can call: one result, or two with the second an error.
+func goodFunc(name string, typ reflect.Type) error {
+	switch numOut := typ.NumOut(); {
+	case numOut == 1:
+		return nil
+	case numOut == 2 && typ.Out(1) == reflect.TypeFor[error]():
+		return nil
+	case numOut == 2:
+		return fmt.Errorf("invalid function signature for %s: second return value should be error; is %s", name, typ.Out(1))
+	default:
+		return fmt.Errorf("function %s has %d return values; should be 1 or 2", name, typ.NumOut())
+	}
 }
 
 // goodFuncName reports whether name is an identifier, as text/template

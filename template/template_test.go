@@ -3,6 +3,7 @@ package template
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	stdtemplate "html/template"
 	"io"
 	"os"
@@ -1108,4 +1109,51 @@ func TestFuncsPanicsOnBadNameWithTextTemplateMessage(t *testing.T) {
 	}()
 	New("X").Funcs(FuncMap{"a-b": func() {}})
 	t.Error("Funcs did not panic on a bad function name")
+}
+
+// funcsPanicMessage returns the message f panics with, or "" when f does not panic.
+func funcsPanicMessage(f func()) (msg string) {
+	defer func() {
+		if r := recover(); r != nil {
+			msg = fmt.Sprint(r)
+		}
+	}()
+	f()
+	return ""
+}
+
+// Funcs panics on a function whose results text/template cannot use, with the
+// message html/template's Funcs panics with, and accepts the two result shapes
+// text/template allows.
+func TestFuncsPanicsOnBadResults(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   any
+		bad  bool
+	}{
+		{name: "no result", fn: func() {}, bad: true},
+		{name: "three results", fn: func() (int, int, int) { return 0, 0, 0 }, bad: true},
+		{name: "two results, second not error", fn: func() (int, int) { return 0, 0 }, bad: true},
+		{name: "one result", fn: func() int { return 0 }},
+		{name: "result and error", fn: func() (int, error) { return 0, nil }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want := funcsPanicMessage(func() {
+				stdtemplate.New("X").Funcs(stdtemplate.FuncMap{"f": tt.fn})
+			})
+			if tt.bad && want == "" {
+				t.Fatal("html/template's Funcs did not panic: the row is not a bad result")
+			}
+			if !tt.bad && want != "" {
+				t.Fatalf("html/template's Funcs panicked with %q: the row is not a good result", want)
+			}
+			got := funcsPanicMessage(func() {
+				New("X").Funcs(FuncMap{"f": tt.fn})
+			})
+			if got != want {
+				t.Errorf("Funcs panic = %q, want %q", got, want)
+			}
+		})
+	}
 }
