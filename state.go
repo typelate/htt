@@ -1750,8 +1750,10 @@ func (s *state) errorf(format string, args ...any) ExecError {
 	return errorf(name, format, args...)
 }
 
-func (s *state) writeError(err error) ExecError {
-	return s.errorf("write error: %w", err)
+// writeError returns the writer's error as it is. text/template strips its
+// write wrapper on the way out, so the caller sees the writer's text.
+func (s *state) writeError(err error) error {
+	return err
 }
 
 var reflectValueType = reflect.TypeFor[reflect.Value]()

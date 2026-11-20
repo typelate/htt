@@ -207,6 +207,45 @@ func (v *builtinStrV) String() string {
 	return fmt.Sprintf("<%d>", v.N)
 }
 
+// sentinelWriter fails every write with err, so a run that writes returns it.
+type sentinelWriter struct {
+	err error
+}
+
+func (w sentinelWriter) Write(p []byte) (int, error) {
+	return 0, w.err
+}
+
+// TestBuiltinWriterError: a failing writer's error comes back as it is, not
+// wrapped, with the same text text/template returns.
+func TestBuiltinWriterError(t *testing.T) {
+	errWriter := errors.New("writer failed")
+	for _, input := range []string{"hello", "{{.}}"} {
+		t.Run(input, func(t *testing.T) {
+			std := texttemplate.Must(texttemplate.New("t").Parse(input))
+			wantErr := std.Execute(sentinelWriter{err: errWriter}, "data")
+			if wantErr == nil {
+				t.Fatalf("text/template.Execute(%q) into a failing writer = nil, want an error", input)
+			}
+			set, err := htt.NewText[any]("t").Parse(input)
+			if err != nil {
+				t.Fatalf("htt.Parse(%q) = %v", input, err)
+			}
+			tree, ok := set.FindTree("t")
+			if !ok {
+				t.Fatal("template t not found")
+			}
+			gotErr := htt.ExecuteTemplate(sentinelWriter{err: errWriter}, tree, "data", htt.WithFinder(set))
+			if !errors.Is(gotErr, errWriter) {
+				t.Errorf("htt.ExecuteTemplate(%q) = %v, want an error that wraps %v", input, gotErr, errWriter)
+			}
+			if gotErr == nil || gotErr.Error() != wantErr.Error() {
+				t.Errorf("htt.ExecuteTemplate(%q) = %v, want %v", input, gotErr, wantErr)
+			}
+		})
+	}
+}
+
 func TestBuiltinReflectValueData(t *testing.T) {
 	runBuiltinRows(t, []builtinRow{
 		{name: "range over reflect.Value data", input: `{{range .}}{{.String}}{{end}}`, data: reflect.ValueOf([]builtinStrV{{N: 1}}), want: "<1>"},

@@ -1363,9 +1363,6 @@ func (e ErrorWriter) Write(p []byte) (int, error) {
 }
 
 func TestExecuteGivesExecError(t *testing.T) {
-	// Changed: both checks fail. The writer error comes back wrapped as "write error: always be failing",
-	// and the field error is not a text/template ExecError.
-	t.Skip("differs from html/template: a writer error is wrapped as \"write error: always be failing\"; a field error is not an ExecError (\"field X in type int\" is returned with no template location)")
 	// First, a non-execution error shouldn't be an ExecError.
 	tmpl, err := New("X").Parse("hello")
 	if err != nil {
@@ -1378,6 +1375,7 @@ func TestExecuteGivesExecError(t *testing.T) {
 	if err.Error() != alwaysErrorText {
 		t.Errorf("expected %q error; got %q", alwaysErrorText, err)
 	}
+	t.Skip("differs from html/template: a field error is not an ExecError (\"field X in type int\" is returned with no template location)")
 	// This one should be an ExecError.
 	tmpl, err = New("X").Parse("hello, {{.X.Y}}")
 	if err != nil {
