@@ -1447,8 +1447,6 @@ func TestGoodFuncNames(t *testing.T) {
 }
 
 func TestBadFuncNames(t *testing.T) {
-	// Changed: all three names are accepted; html/template panics for each.
-	t.Skip("differs from html/template: Funcs accepts \"\", \"2\" and \"a-b\" without a panic")
 	names := []string{
 		"",
 		"2",

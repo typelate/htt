@@ -1083,3 +1083,29 @@ func TestExecuteErrorsAreHTMLTemplatesErrors(t *testing.T) {
 		})
 	}
 }
+
+// Funcs panics on a value that is not a function, as text/template's does.
+func TestFuncsPanicsOnValueThatIsNotAFunction(t *testing.T) {
+	defer func() {
+		got := recover()
+		const want = "value for notFunc not a function"
+		if got != want {
+			t.Errorf("panic = %v, want %q", got, want)
+		}
+	}()
+	New("X").Funcs(FuncMap{"notFunc": 1})
+	t.Error("Funcs did not panic on a value that is not a function")
+}
+
+// Funcs panics on a name that is not an identifier, with text/template's message.
+func TestFuncsPanicsOnBadNameWithTextTemplateMessage(t *testing.T) {
+	defer func() {
+		got := recover()
+		const want = `function name "a-b" is not a valid identifier`
+		if err, ok := got.(error); !ok || err.Error() != want {
+			t.Errorf("panic = %v, want %q", got, want)
+		}
+	}()
+	New("X").Funcs(FuncMap{"a-b": func() {}})
+	t.Error("Funcs did not panic on a bad function name")
+}

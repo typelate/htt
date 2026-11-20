@@ -27,9 +27,11 @@ import (
 	"io"
 	"io/fs"
 	"maps"
+	"reflect"
 	"sort"
 	"strings"
 	texttemplate "text/template"
+	"unicode"
 
 	"github.com/typelate/htt"
 	"github.com/typelate/htt/lex"
@@ -162,10 +164,36 @@ func (t *Template) Funcs(funcMap FuncMap) *Template {
 		t.common.funcMap = make(htt.FuncMap)
 	}
 	for k, v := range funcMap {
+		// As text/template's addValueFuncs does, a bad name or value panics.
+		if !goodFuncName(k) {
+			panic(fmt.Errorf("function name %q is not a valid identifier", k))
+		}
+		if reflect.ValueOf(v).Kind() != reflect.Func {
+			panic("value for " + k + " not a function")
+		}
 		t.common.funcMap[k] = v
 	}
 	t.common.esc = new(escapeSet)
 	return t
+}
+
+// goodFuncName reports whether name is an identifier, as text/template
+// requires of a function name: a letter or underscore, then letters,
+// digits and underscores.
+func goodFuncName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i, r := range name {
+		switch {
+		case r == '_':
+		case i == 0 && !unicode.IsLetter(r):
+			return false
+		case !unicode.IsLetter(r) && !unicode.IsDigit(r):
+			return false
+		}
+	}
+	return true
 }
 
 // Delims sets the action delimiters for later parses in t's set. An empty
