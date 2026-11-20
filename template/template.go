@@ -2,13 +2,13 @@
 // written for html/template can run on trees that keep positions and count
 // coverage.
 //
-// Execute escapes with a copy of the escaper of html/template in Go 1.27.3,
-// run over a text-mode parse of the same source, so the output and the
-// escaping errors are that html/template's, whatever Go builds the program.
-// A fix Go makes to html/template later reaches this package only when the
-// copy is updated. The copy is checked against the standard library's
-// escaping and error tables and by a differential fuzz, and nothing more:
-// do not serve its output.
+// Execute escapes with a copy of html/template's escaper, run over a
+// text-mode parse of the same source. The header of esc_escape.go names
+// the Go release the copy came from: the output and the escaping errors
+// are that html/template's, whatever Go builds the program, and a fix Go
+// makes later reaches this package only when the copy is updated. The copy
+// is checked against the standard library's escaping and error tables and
+// by a differential fuzz, and nothing more: do not serve its output.
 //
 // The safe-content types are this package's own. Values of html/template's
 // content types are recognized as well.

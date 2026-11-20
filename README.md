@@ -8,7 +8,7 @@ It was factored out of [muxt](https://github.com/typelate/muxt), which uses it t
 
 Render pages for a browser with the standard library's `html/template`. htt runs templates so that tests and tools can see what a template produces and which parts of it ran.
 
-`htt/template` escapes with a copy of the escaper of `html/template` in Go 1.27.3. It has that release's escaping fixes whatever Go builds your program, and it does not get a later Go's fixes until the copy is updated. On the standard library's own escaping and error test tables its output and its errors are that `html/template`'s, and a fuzz target compares the two on generated templates. Nothing more has checked it, so treat its output as test data. The aim is a `htt/template` you can serve from.
+`htt/template` escapes with a copy of `html/template`'s escaper. The header of [`template/esc_escape.go`](template/esc_escape.go) names the Go release it was copied from. It has that release's escaping fixes whatever Go builds your program, and it does not get a later Go's fixes until the copy is updated. On the standard library's own escaping and error test tables its output and its errors are that `html/template`'s, and a fuzz target compares the two on generated templates. Nothing more has checked it, so treat its output as test data. The aim is a `htt/template` you can serve from.
 
 The root package's [`ExecuteTemplate`](https://pkg.go.dev/github.com/typelate/htt#ExecuteTemplate) is a different engine when its tree has HTML structure. It escapes less than `html/template` does, and its documentation lists the known differences, for example:
 
