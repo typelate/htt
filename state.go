@@ -620,6 +620,11 @@ func (s *state) evalFunction(dot reflect.Value, node *IdentifierNode, cmd *Comma
 			return s.evalAndOr(dot, name, args, final)
 		}
 	}
+	if name == "call" {
+		if _, overridden := s.funcs[name]; !overridden {
+			return s.evalCallBuiltin(dot, cmd, args, final)
+		}
+	}
 	fn, ok := s.findFunction(name)
 	if !ok {
 		return missingVal, s.errorf("function %q not defined", name)
@@ -649,6 +654,19 @@ func (s *state) evalAndOr(dot reflect.Value, name string, args []Node, final ref
 		return result, nil
 	}
 	return result, nil
+}
+
+// evalCallBuiltin evaluates the builtin call. The text of the callee, args[1],
+// names it in errors, as in text/template; a call with no callee uses final.
+func (s *state) evalCallBuiltin(dot reflect.Value, cmd *CommandNode, args []Node, final reflect.Value) (reflect.Value, error) {
+	calleeName := final.String()
+	if len(args) > 1 {
+		calleeName = args[1].String()
+	}
+	callee := func(fn reflect.Value, callArgs ...reflect.Value) (reflect.Value, error) {
+		return call(calleeName, fn, callArgs...)
+	}
+	return s.evalCall(dot, reflect.ValueOf(callee), cmd, "call", args, final)
 }
 
 func (s *state) findFunction(name string) (reflect.Value, bool) {

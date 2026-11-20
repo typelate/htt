@@ -176,3 +176,24 @@ func TestBuiltinInterfaceTruth(t *testing.T) {
 		{name: "and non-empty slice in any", input: `{{and .Slice true}}`, data: data, want: "true"},
 	})
 }
+
+func newBuiltinCallData() map[string]any {
+	return map[string]any{
+		"PlusOne": func(n int) int {
+			return n + 1
+		},
+		"Nil":  nil,
+		"One":  1,
+		"Zero": 0,
+	}
+}
+
+func TestBuiltinCallInterface(t *testing.T) {
+	data := newBuiltinCallData()
+	runBuiltinRows(t, []builtinRow{
+		{name: "call func in any", input: `{{call .PlusOne 1}}`, data: data, want: "2"},
+		{name: "call func in any with field arg", input: `{{call .PlusOne .One}}`, data: data, want: "2"},
+		{name: "call nil in any", input: `{{call .Nil 1}}`, data: data, stage: "execute", err: "call of nil"},
+		{name: "call int in any", input: `{{call .Zero 1}}`, data: data, stage: "execute", err: "non-function .Zero of type int"},
+	})
+}

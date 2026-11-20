@@ -1606,14 +1606,6 @@ func TestAddrOfIndex(t *testing.T) {
 	}
 }
 
-// Changed: rows whose result differs from html/template, keyed by template text.
-// htt calls a func stored in a map[string]any through a non-function error.
-var interfaceDiffers = map[string]string{
-	"{{call .Nil 1}}":        `error is "non-function of type interface {}", not "call of nil"`,
-	"{{call .PlusOne 1}}":    `a func held in map[string]any fails with "non-function of type interface {}"`,
-	"{{call .PlusOne .One}}": `a func held in map[string]any fails with "non-function of type interface {}"`,
-}
-
 func TestInterfaceValues(t *testing.T) {
 	// golang.org/issue/17714.
 	// Before index worked on reflect.Values, interface values
@@ -1658,11 +1650,6 @@ func TestInterfaceValues(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		// Changed: rows whose result differs from html/template; see interfaceDiffers.
-		if reason, ok := interfaceDiffers[tt.text]; ok {
-			t.Logf("%s: skipped, differs from html/template: %s", tt.text, reason)
-			continue
-		}
 		tmpl := Must(New("tmpl").Parse(tt.text))
 		var buf strings.Builder
 		err := tmpl.Execute(&buf, map[string]any{

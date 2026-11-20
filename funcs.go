@@ -10,7 +10,7 @@ import (
 func builtins() FuncMap {
 	return FuncMap{
 		"and":      and,
-		"call":     call,
+		"call":     emptyCall,
 		"html":     texttemplate.HTMLEscaper,
 		"index":    index,
 		"slice":    slice,
@@ -116,10 +116,21 @@ func length(item reflect.Value) (int, error) {
 	}
 }
 
-func call(fn reflect.Value, args ...reflect.Value) (reflect.Value, error) {
+// emptyCall is never called: the executor runs the builtin call itself, with the
+// callee's text as its name, as text/template does.
+func emptyCall(fn reflect.Value, args ...reflect.Value) reflect.Value {
+	panic("unreachable")
+}
+
+// call returns the result of calling fn, which name identifies in errors.
+func call(name string, fn reflect.Value, args ...reflect.Value) (reflect.Value, error) {
+	fn = indirectInterface(fn)
+	if !fn.IsValid() {
+		return reflect.Value{}, fmt.Errorf("call of nil")
+	}
 	typ := fn.Type()
 	if typ.Kind() != reflect.Func {
-		return reflect.Value{}, fmt.Errorf("non-function of type %s", typ)
+		return reflect.Value{}, fmt.Errorf("non-function %s of type %s", name, typ)
 	}
 	if !goodFunc(typ) {
 		return reflect.Value{}, fmt.Errorf("function called with %d args; should be 1 or 2", typ.NumOut())
@@ -139,9 +150,7 @@ func call(fn reflect.Value, args ...reflect.Value) (reflect.Value, error) {
 	argv := make([]reflect.Value, len(args))
 	for i, arg := range args {
 		paramType := argType(typ, i, numIn, dddType)
-		if arg.Kind() == reflect.Interface && arg.IsNil() {
-			arg = reflect.Value{}
-		}
+		arg = indirectInterface(arg)
 		if !arg.IsValid() && !canBeNil(paramType) {
 			return reflect.Value{}, fmt.Errorf("value is nil; should be of type %s", paramType)
 		}
