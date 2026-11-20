@@ -62,6 +62,11 @@ type common struct {
 	// esc holds the plans made from shadow. Anything that changes the
 	// templates replaces it.
 	esc *escapeSet
+	// executed is set by the first execution, under esc's lock. From then on
+	// the set refuses Parse, AddParseTree, ParseFiles, ParseGlob, ParseFS
+	// and Clone, as html/template's does, because the plans in esc are made
+	// from the trees as they were.
+	executed bool
 }
 
 // New returns an undefined template named name, in a set of its own.
@@ -196,6 +201,9 @@ func (t *Template) Option(opt ...string) *Template {
 // Parse parses text as the body of t. The templates text defines join t's
 // set.
 func (t *Template) Parse(text string) (*Template, error) {
+	if err := t.checkCanParse(); err != nil {
+		return nil, err
+	}
 	options := t.lexOptions()
 	treeSet := make(map[string]*htt.Tree)
 	tree, err := htt.ParseTree(t.name, t.name, text, treeSet, options)
@@ -249,6 +257,9 @@ func (t *Template) parseShadow(text string, replaced map[string]bool) error {
 // inspection and annotated in place; executing it is an error. An empty tree
 // does not replace a definition.
 func (t *Template) AddParseTree(name string, tree *htt.Tree) (*Template, error) {
+	if err := t.checkCanParse(); err != nil {
+		return nil, err
+	}
 	if tree.HTMLMode {
 		htt.AnnotateHTMLContexts(tree.Root)
 	}
@@ -284,6 +295,9 @@ func (t *Template) addTree(name string, tree *htt.Tree) (*Template, bool) {
 // Clone returns a copy of t and its set. The trees are shared; templates
 // parsed into the copy do not reach the original.
 func (t *Template) Clone() (*Template, error) {
+	if t.hasExecuted() {
+		return nil, fmt.Errorf("html/template: cannot Clone %q after it has executed", t.name)
+	}
 	nt := &Template{
 		name: t.name,
 	}
@@ -316,12 +330,14 @@ func (t *Template) Clone() (*Template, error) {
 // Execute applies t to data and writes the output to wr. The output must
 // not be served; see htt.ExecuteTemplate.
 func (t *Template) Execute(wr io.Writer, data any) error {
+	t.markExecuted()
 	return t.execute(wr, t.name, data)
 }
 
 // ExecuteTemplate applies the template named name in t's set to data and
 // writes the output to wr. The output must not be served.
 func (t *Template) ExecuteTemplate(wr io.Writer, name string, data any) error {
+	t.markExecuted()
 	tmpl := t.Lookup(name)
 	if tmpl == nil || tmpl.Tree == nil {
 		return fmt.Errorf("html/template: %q is an incomplete or empty template%s", name, t.DefinedTemplates())
@@ -344,6 +360,33 @@ func (t *Template) execute(wr io.Writer, name string, data any) error {
 		return processCover.execute(wr, text, data, opts, t.htmlTreeOf)
 	}
 	return htt.ExecuteTemplate(wr, text, data, opts...)
+}
+
+// markExecuted freezes t's set: it is called by every execution, whether or
+// not the execution succeeds, as html/template's escape is.
+func (t *Template) markExecuted() {
+	t.common.esc.mu.Lock()
+	defer t.common.esc.mu.Unlock()
+	t.common.executed = true
+}
+
+// hasExecuted reports whether t's set has been executed.
+func (t *Template) hasExecuted() bool {
+	t.common.esc.mu.Lock()
+	defer t.common.esc.mu.Unlock()
+	return t.common.executed
+}
+
+// checkCanParse returns html/template's error for parsing into a set that
+// has executed, and nil for a nil t, as html/template's does.
+func (t *Template) checkCanParse() error {
+	if t == nil {
+		return nil
+	}
+	if t.hasExecuted() {
+		return fmt.Errorf("html/template: cannot Parse after Execute")
+	}
+	return nil
 }
 
 // htmlTreeOf returns the tree with HTML structure that the shadow text tree

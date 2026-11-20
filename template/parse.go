@@ -26,6 +26,9 @@ func ParseFS(fsys fs.FS, patterns ...string) (*Template, error) {
 }
 
 func parseFiles(t *Template, readFile func(string) (string, string, []byte, error), filenames ...string) (*Template, error) {
+	if err := t.checkCanParse(); err != nil {
+		return nil, err
+	}
 	if len(filenames) == 0 {
 		return nil, fmt.Errorf("html/template: no files named in call to ParseFiles")
 	}
@@ -59,6 +62,9 @@ func parseFiles(t *Template, readFile func(string) (string, string, []byte, erro
 }
 
 func parseGlob(t *Template, pattern string) (*Template, error) {
+	if err := t.checkCanParse(); err != nil {
+		return nil, err
+	}
 	filenames, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, err

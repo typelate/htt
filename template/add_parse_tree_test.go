@@ -116,6 +116,9 @@ func TestExecuteOfAnAddedHTMLTreeSaysWhy(t *testing.T) {
 	tmpl := template.New("index")
 	_, err = tmpl.AddParseTree("row", rowTree)
 	require.NoError(t, err)
+	// Parsed before the first execution: a set that has executed refuses Parse.
+	_, err = tmpl.Parse(`<p>{{template "row" .}}</p>`)
+	require.NoError(t, err)
 
 	var buf bytes.Buffer
 	err = tmpl.ExecuteTemplate(&buf, "row", "x")
@@ -124,8 +127,6 @@ func TestExecuteOfAnAddedHTMLTreeSaysWhy(t *testing.T) {
 	assert.Contains(t, err.Error(), "no text form")
 	assert.Empty(t, buf.String())
 
-	_, err = tmpl.Parse(`<p>{{template "row" .}}</p>`)
-	require.NoError(t, err)
 	buf.Reset()
 	err = tmpl.Execute(&buf, "x")
 	require.Error(t, err)
