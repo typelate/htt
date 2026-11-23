@@ -24,8 +24,9 @@ const escaperCopyVersion = "go1.27.3"
 
 // FuzzDiffEscape runs each template text through html/template and through
 // this package. Both must fail or both succeed, and a success must write the
-// same bytes. A failure must carry the same ErrorCode, and this package must
-// write nothing. A text that html/template rejects at Parse is skipped. A text
+// same bytes. A failure must give the same error text and the same bytes
+// written before it, and an escaping failure the same ErrorCode. A text that
+// html/template rejects at Parse is skipped. A text
 // that html/template parses and this package does not is also skipped: the
 // root package's FuzzStdlibAcceptsImpliesHTMLParses owns that property.
 func FuzzDiffEscape(f *testing.F) {
@@ -70,6 +71,14 @@ func FuzzDiffEscape(f *testing.F) {
 			}
 			return
 		}
+		if got, want := httErr.Error(), stdErr.Error(); got != want {
+			t.Fatalf("error text differs\n  text: %q\n  value: %q\n  htt:  err %v\n  std:  err %v",
+				text, value, httErr, stdErr)
+		}
+		if got, want := httBuf.String(), stdBuf.String(); got != want {
+			t.Fatalf("htt and html/template write different bytes before failing with %v\n  text: %q\n  value: %q\n  htt:  %q\n  std:  %q",
+				stdErr, text, value, got, want)
+		}
 		var stdCode *htmltemplate.Error
 		if !errors.As(stdErr, &stdCode) {
 			return
@@ -78,10 +87,6 @@ func FuzzDiffEscape(f *testing.F) {
 		if !errors.As(httErr, &httCode) || int(httCode.ErrorCode) != int(stdCode.ErrorCode) {
 			t.Fatalf("error codes differ\n  text: %q\n  value: %q\n  htt:  err %v\n  std:  err %v",
 				text, value, httErr, stdErr)
-		}
-		if httBuf.Len() != 0 {
-			t.Fatalf("htt wrote %q before failing with %v\n  text: %q\n  value: %q",
-				httBuf.String(), httErr, text, value)
 		}
 	})
 }
