@@ -45,6 +45,15 @@ func doublePercent(str string) string {
 	return strings.ReplaceAll(str, "%", "%%")
 }
 
+// ErrorContext returns the location of n as ParseName:line:column, with a
+// 1-based line and a 0-based column, and the text of n as text/template
+// writes it: one space between words and no trim markers, whatever the
+// source has. It is what text/template/parse's ErrorContext returns for the
+// same node. t stands in for a node that has no tree of its own.
+func (t *Tree) ErrorContext(n Node) (location, context string) {
+	return errorContext(t, n)
+}
+
 // errorContext mirrors (*parse.Tree).ErrorContext: the location of n as
 // ParseName:line:column, with a 1-based line and a 0-based column, and the
 // text of n. t stands in for a node that has no tree of its own.
