@@ -19,15 +19,22 @@ type ExecError = texttemplate.ExecError
 // "template: LOCATION: executing NAME at <CONTEXT>: MESSAGE", or
 // "template: NAME: MESSAGE" when n is nil.
 func errorf(t *Tree, n Node, format string, args ...any) ExecError {
-	name := doublePercent(t.Name)
+	return namedErrorf(t.Name, t, n, format, args...)
+}
+
+// namedErrorf is errorf for a tree running under name, which is not always
+// the tree's own: text/template names a template in an error as it was
+// executed or called.
+func namedErrorf(name string, t *Tree, n Node, format string, args ...any) ExecError {
+	escaped := doublePercent(name)
 	if n == nil {
-		format = fmt.Sprintf("template: %s: %s", name, format)
+		format = fmt.Sprintf("template: %s: %s", escaped, format)
 	} else {
 		location, context := errorContext(t, n)
-		format = fmt.Sprintf("template: %s: executing %q at <%s>: %s", location, name, doublePercent(context), format)
+		format = fmt.Sprintf("template: %s: executing %q at <%s>: %s", location, escaped, doublePercent(context), format)
 	}
 	return ExecError{
-		Name: t.Name,
+		Name: name,
 		Err:  fmt.Errorf(format, args...),
 	}
 }

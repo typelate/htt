@@ -2,6 +2,7 @@ package htt
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"io"
 	"reflect"
@@ -1873,7 +1874,13 @@ func (s *state) at(n Node) {
 }
 
 func (s *state) errorf(format string, args ...any) ExecError {
-	return errorf(s.tree, s.node, format, args...)
+	return namedErrorf(s.templateName(), s.tree, s.node, format, args...)
+}
+
+// templateName returns the name the running template was executed or called
+// as, and the name of its tree when it was given none.
+func (s *state) templateName() string {
+	return cmp.Or(s.instance, s.tree.Name)
 }
 
 // writeError returns the writer's error as it is. text/template strips its
