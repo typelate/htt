@@ -1095,12 +1095,10 @@ func TestMessageForExecuteEmpty(t *testing.T) {
 		t.Errorf("expected error %s got %s", want, got)
 	}
 	// Make sure we can execute the secondary.
-	t.Run("secondary", func(t *testing.T) {
-		t.Skip("differs from html/template: \"secondary\" is a tree with HTML structure from another set, which AddParseTree keeps without a text form, so ExecuteTemplate fails with \"has no text form to escape\"")
-		if err := tmpl.ExecuteTemplate(&b, "secondary", 0); err != nil {
-			t.Fatal(err)
-		}
-	})
+	err = tmpl.ExecuteTemplate(&b, "secondary", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFinalForPrintf(t *testing.T) {

@@ -59,8 +59,9 @@ type common struct {
 	rightDelim string
 
 	// shadow is the same source as the trees of tmpl, parsed as text, by
-	// template name. A template added from a tree with HTML structure is nil:
-	// it has no text form to escape.
+	// template name. A template added from another set's tree with HTML
+	// structure is nil until the first execution, which parses the tree's
+	// source as text; see addTextForms.
 	shadow map[string]*htt.Tree
 	// bodies is the parse tree of each name in the set, as text/template keeps
 	// its bodies in the set. A template made again with New takes its body
@@ -313,12 +314,11 @@ func (t *Template) parseShadow(text string, replaced map[string]bool) error {
 }
 
 // AddParseTree adds tree to t's set under name and returns its template.
-// A tree parsed without HTML structure is escaped as html/template escapes a
-// parse tree added that way. A tree with HTML structure that is the tree of
-// a template in t's set runs with that template's text form. Any other tree
-// with HTML structure is kept for inspection and annotated in place;
-// executing it is an error. An empty tree
-// does not replace a definition.
+// The template is escaped and executed as html/template runs a parse tree
+// added that way, whether tree was parsed with HTML structure or without,
+// in this set or another. A tree with HTML structure is annotated in place.
+// Executing one whose source defines no template of the tree's name is an
+// error. An empty tree does not replace a definition.
 func (t *Template) AddParseTree(name string, tree *htt.Tree) (*Template, error) {
 	if err := t.checkCanParse(); err != nil {
 		return nil, err
@@ -338,7 +338,7 @@ func (t *Template) AddParseTree(name string, tree *htt.Tree) (*Template, error) 
 
 // shadowOf returns the text tree of the template of t's set whose tree is
 // tree, or nil when no such template has one. A tree with HTML structure
-// from outside the set has no text form.
+// from outside the set gets its text form at the first execution.
 func (t *Template) shadowOf(tree *htt.Tree) *htt.Tree {
 	for name, body := range t.common.bodies {
 		if body == tree && t.common.shadow[name] != nil {
@@ -363,7 +363,7 @@ func (t *Template) addTree(name string, tree *htt.Tree) (*Template, bool) {
 	replaced := t.common.bodies[name] == nil || !htt.IsEmptyTree(tree.Root)
 	if replaced {
 		t.common.bodies[name] = tree
-		// A nil shadow marks a template defined with no text form to escape.
+		// A nil shadow marks a template with no text form yet; see addTextForms.
 		t.common.shadow[name] = nil
 	}
 	tmpl.Tree = t.common.bodies[name]
@@ -449,7 +449,69 @@ func (t *Template) execute(wr io.Writer, name string, data any) error {
 func (t *Template) markExecuted() {
 	t.common.esc.mu.Lock()
 	defer t.common.esc.mu.Unlock()
+	if !t.common.executed {
+		t.addTextForms()
+	}
 	t.common.executed = true
+}
+
+// addTextForms gives each template added from another set's tree with HTML
+// structure its text form: the tree's source parsed again as text, with the
+// tree's delimiters. It runs once, at the first execution, so a set that is
+// only inspected never parses twice. A template whose tree's source defines
+// no template of the tree's name is left without one.
+func (t *Template) addTextForms() {
+	type source struct{ text, left, right, fileName, templateName string }
+	parsed := make(map[source]map[string]*htt.Tree)
+	for name, body := range t.common.bodies {
+		if body == nil || !body.HTMLMode || t.common.shadow[name] != nil {
+			continue
+		}
+		left, right := body.Delims()
+		src := source{
+			text: body.Source(), left: left, right: right,
+			fileName: cmp.Or(body.Filepath, body.ParseName),
+			// A define's tree does not say what its source was parsed as;
+			// html/template parses a source as the template it is named for.
+			templateName: body.ParseName,
+		}
+		if isWholeSource(body) {
+			src.templateName = body.Name
+		}
+		trees, ok := parsed[src]
+		if !ok {
+			trees = t.parseAsText(src.fileName, src.templateName, src.text, left, right)
+			parsed[src] = trees
+		}
+		text := trees[body.Name]
+		if text == nil {
+			continue
+		}
+		// Errors name the template the tree was parsed for, as html/template's do.
+		text.ParseName, text.Filepath = body.ParseName, body.Filepath
+		t.common.shadow[name] = text
+	}
+}
+
+// isWholeSource reports whether tree is the tree of the text it was parsed
+// from, and not of a {{define}} or {{block}} in that text.
+func isWholeSource(tree *htt.Tree) bool {
+	return tree.Root != nil && tree.Root.Start() == 0 && int(tree.Root.End()) == len(tree.Source())
+}
+
+// parseAsText returns the trees text defines when parsed without HTML
+// structure as the template named templateName, or nil when it does not
+// parse.
+func (t *Template) parseAsText(fileName, templateName, text, left, right string) map[string]*htt.Tree {
+	options := t.lexOptions()
+	options.ParseHTML = false
+	options.LeftDelim, options.RightDelim = left, right
+	treeSet := make(map[string]*htt.Tree)
+	tree, err := htt.ParseTree(fileName, templateName, text, treeSet, options)
+	if err != nil {
+		return nil
+	}
+	return htt.DefinedTrees(tree, treeSet)
 }
 
 // hasExecuted reports whether t's set has been executed.
