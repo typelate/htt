@@ -194,9 +194,12 @@ func (e *escaper) escapeAction(c context, n *htt.ActionNode) context {
 		case urlPartQueryOrFrag:
 			s = append(s, "_html_template_urlescaper")
 		case urlPartUnknown:
+			// Changed: the action is named by its ErrorContext text. Its
+			// String is the source span, with the source's spacing.
+			_, action := (*htt.Tree)(nil).ErrorContext(n)
 			return context{
 				state: stateError,
-				err:   errorf(ErrAmbigContext, n, n.Line, "%s appears in an ambiguous context within a URL", n),
+				err:   errorf(ErrAmbigContext, n, n.Line, "%s appears in an ambiguous context within a URL", action),
 			}
 		default:
 			panic(c.urlPart.String())
