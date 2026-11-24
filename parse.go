@@ -15,12 +15,23 @@ import (
 	"github.com/typelate/htt/lex"
 )
 
+// A Mode value is a set of flags (or 0), as text/template/parse's Mode is.
+// A tree's Mode records how it was parsed; the parser is told what to do
+// with lex.Options, so changing a Mode changes nothing.
+type Mode uint
+
+const (
+	ParseComments Mode = 1 << iota // comments were parsed and added to the tree
+	SkipFuncCheck                  // functions were not checked to be defined
+)
+
 // Tree is the representation of a single parsed template.
 type Tree struct {
 	Name      string    // name of the template represented by the tree.
 	ParseName string    // name of the top-level template during parsing, for error messages.
 	Filepath  string    // absolute file path, if known.
 	Root      *ListNode // top-level root of the tree.
+	Mode      Mode      // parsing mode.
 	// HTMLMode says the tree executes with contextual escaping, whatever
 	// its root holds.
 	HTMLMode bool
@@ -82,6 +93,12 @@ func ParseTree(fileName, templateName, text string, treeSet map[string]*Tree, op
 	t.text = text
 	t.leftDelim, t.rightDelim = options.LeftDelim, options.RightDelim
 	t.functions = options.Functions
+	if options.EmitComment {
+		t.Mode |= ParseComments
+	}
+	if options.Functions == nil {
+		t.Mode |= SkipFuncCheck
+	}
 	t.maxHTMLDepth = options.MaxHTMLDepth
 	if t.maxHTMLDepth == 0 {
 		t.maxHTMLDepth = 1024
@@ -442,6 +459,7 @@ func (t *Tree) parse() error {
 				newT.text = t.text
 				newT.leftDelim, newT.rightDelim = t.leftDelim, t.rightDelim
 				newT.functions = t.functions
+				newT.Mode = t.Mode
 				newT.ParseName = t.ParseName
 				newT.Filepath = t.Filepath
 				newT.startParse(t.scanner, t.treeSet)
@@ -1004,6 +1022,7 @@ func (t *Tree) blockControl() (Node, error) {
 	block.Root = body
 	block.text = t.text
 	block.leftDelim, block.rightDelim = t.leftDelim, t.rightDelim
+	block.Mode = t.Mode
 	block.ParseName = t.ParseName
 	block.Filepath = t.Filepath
 	block.HTMLMode = t.HTMLMode
