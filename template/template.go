@@ -41,11 +41,18 @@ import (
 // FuncMap is text/template's FuncMap, as it is in html/template.
 type FuncMap = texttemplate.FuncMap
 
+// ExecError is text/template's ExecError: the error Execute returns when a
+// template fails while it runs.
+type ExecError = texttemplate.ExecError
+
 // Template is a parsed template and the set it belongs to. Once parsed it
 // is safe for concurrent use.
 type Template struct {
-	// Tree is the parse tree, nil until the template is parsed.
-	Tree *htt.Tree
+	// Tree is the parse tree, nil until the template is parsed. It is
+	// embedded, as text/template embeds its parse tree, so the tree's fields
+	// and methods can be selected on the template; html/template's field of
+	// the same name is not embedded.
+	*htt.Tree
 
 	name   string
 	common *common
