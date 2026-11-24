@@ -4,7 +4,11 @@ package template
 // html/template, so it cannot import it. The escapers recognize
 // html/template's types as well.
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/typelate/htt"
+)
 
 // CSS encapsulates known safe content that matches any of:
 //  1. The CSS3 stylesheet production, such as `p { color: purple }`.
@@ -84,7 +88,7 @@ type Error struct {
 	ErrorCode ErrorCode
 	// Node is the node that caused the problem, if known.
 	// If not nil, it overrides Name and Line.
-	Node interface{ String() string }
+	Node htt.Node
 	// Name is the name of the template in which the error was encountered.
 	Name string
 	// Line is the line number of the error in the template source or 0.
