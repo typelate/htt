@@ -1,6 +1,8 @@
 // Package template puts html/template's API over package htt, so that code
 // written for html/template can run on trees that keep positions and count
-// coverage.
+// coverage. It has text/template's API as well: ExecError, and the fields
+// and methods a text/template Template takes from its embedded parse tree.
+// A test compares both with the standard library that runs it.
 //
 // Execute escapes with a copy of html/template's escaper, run over a
 // text-mode parse of the same source. The header of esc_escape.go names

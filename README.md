@@ -23,7 +23,7 @@ The API carries no compatibility promise; any release may change it.
 | Import path | Provides |
 |---|---|
 | `github.com/typelate/htt` | The parser, the tree (actions, HTML elements, attributes and comments as nodes with positions), and the execution engine. |
-| `github.com/typelate/htt/template` | The API of `html/template` over that engine. |
+| `github.com/typelate/htt/template` | The API of `html/template` and of `text/template` over that engine. |
 | `github.com/typelate/htt/lex` | The lexer both use. |
 
 ```bash
@@ -32,7 +32,7 @@ go get github.com/typelate/htt
 
 ## Execute a template
 
-`htt/template` has the names `html/template` has:
+`htt/template` has every exported name, field and method that `html/template` and `text/template` have:
 
 ```go
 package main
