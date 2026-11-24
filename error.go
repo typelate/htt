@@ -50,6 +50,13 @@ func doublePercent(str string) string {
 // writes it: one space between words and no trim markers, whatever the
 // source has. It is what text/template/parse's ErrorContext returns for the
 // same node. t stands in for a node that has no tree of its own.
+//
+// Two results differ, because this tree keeps what the source has. A text
+// node next to a trim marker keeps the white space text/template's lexer
+// drops, in its text and in its location. The list of an {{else if}} or
+// {{else with}} is located at {{else, where text/template locates it at
+// the keyword after else. A node with HTML structure has no counterpart in
+// text/template; its text is its source.
 func (t *Tree) ErrorContext(n Node) (location, context string) {
 	return errorContext(t, n)
 }
@@ -76,17 +83,17 @@ func errorContext(t *Tree, n Node) (location, context string) {
 }
 
 // errorContextText returns n as text/template's String writes it: one space
-// between words, no trim markers, whatever the source had. A node whose
-// String is the same text in both packages is not rewritten. The nodes'
-// own String is the source span and stays so.
+// between words, no trim markers, whatever the source had. The nodes' own
+// String is the source span and stays so.
 func errorContextText(n Node) string {
 	switch n.(type) {
-	case *PipeNode, *ActionNode, *CommandNode, *TemplateNode:
-		var sb strings.Builder
-		n.writeTo(&sb)
-		return sb.String()
+	case *HTMLDocumentFragmentNode, *HTMLElementNode, *HTMLAttributeNode, *HTMLCommentNode, *HTMLDoctypeNode:
+		// text/template has no such node; the source says it best.
+		return n.String()
 	}
-	return n.String()
+	var sb strings.Builder
+	n.writeTo(&sb)
+	return sb.String()
 }
 
 // execPosition returns the offset text/template records for n, where it
