@@ -478,19 +478,22 @@ func (s *state) evalPipeline(dot reflect.Value, pipe *PipeNode) (reflect.Value, 
 		return missingVal, nil
 	}
 	s.at(pipe)
-	var value reflect.Value
+	value := noFinal
 	for _, cmd := range pipe.Commands {
 		var err error
 		value, err = s.evalCommand(dot, cmd, value)
 		if err != nil {
 			return missingVal, err
 		}
-		// A non-nil value of type any continues with the value inside it, as
-		// text/template's evalPipeline does. A nil one stays, since its
-		// Elem is invalid and a later command would read it as no argument.
-		if value.Kind() == reflect.Interface && value.Type().NumMethod() == 0 && !value.IsNil() {
+		// A value of type any continues as the value inside it, as in
+		// text/template's evalPipeline. A nil one becomes no value, which
+		// is still an argument to the next command.
+		if value.Kind() == reflect.Interface && value.Type().NumMethod() == 0 {
 			value = value.Elem()
 		}
+	}
+	if !hasFinal(value) {
+		value = missingVal
 	}
 	for _, vr := range pipe.Decl {
 		if pipe.IsAssign {
@@ -505,7 +508,7 @@ func (s *state) evalPipeline(dot reflect.Value, pipe *PipeNode) (reflect.Value, 
 }
 
 // evalCommand evaluates a single command in a pipeline. The final argument is the
-// result of the previous command (for pipe chaining), or invalid for the first command.
+// result of the previous command (for pipe chaining), or noFinal for the first command.
 func (s *state) evalCommand(dot reflect.Value, cmd *CommandNode, final reflect.Value) (reflect.Value, error) {
 	firstWord := cmd.Args[0]
 	switch n := firstWord.(type) {
@@ -516,7 +519,7 @@ func (s *state) evalCommand(dot reflect.Value, cmd *CommandNode, final reflect.V
 	case *IdentifierNode:
 		return s.evalFunction(dot, n, cmd, cmd.Args, final)
 	case *PipeNode:
-		if len(cmd.Args) > 1 || final.IsValid() {
+		if len(cmd.Args) > 1 || hasFinal(final) {
 			// Name the stage as text/template does (its commands, without the
 			// parentheses) rather than by source span.
 			var stage strings.Builder
@@ -528,7 +531,7 @@ func (s *state) evalCommand(dot reflect.Value, cmd *CommandNode, final reflect.V
 		return s.evalVariableNode(dot, n, cmd.Args, final)
 	}
 	s.at(firstWord)
-	notAFunction := len(cmd.Args) > 1 || final.IsValid()
+	notAFunction := len(cmd.Args) > 1 || hasFinal(final)
 	if notAFunction {
 		return missingVal, s.errorf("can't give argument to non-function %s", firstWord)
 	}
@@ -600,7 +603,7 @@ func (s *state) evalVariableNode(dot reflect.Value, v *VariableNode, args []Node
 		return missingVal, err
 	}
 	if len(v.Ident) == 1 {
-		notAFunction := len(args) > 1 || final.IsValid()
+		notAFunction := len(args) > 1 || hasFinal(final)
 		if notAFunction {
 			return missingVal, s.errorf("can't give argument to non-function %s", v.Ident[0])
 		}
@@ -618,7 +621,7 @@ func (s *state) evalFieldChain(dot, receiver reflect.Value, node Node, ident []s
 		// zeroArgSentinel, not nil: evalCall counts len(args)-1
 		// arguments, and nil would count -1 and reject a method that
 		// takes none.
-		receiver, err = s.evalField(dot, ident[i], node, zeroArgSentinel, missingVal, receiver)
+		receiver, err = s.evalField(dot, ident[i], node, zeroArgSentinel, noFinal, receiver)
 		if err != nil {
 			return missingVal, err
 		}
@@ -637,7 +640,7 @@ func (s *state) evalFunction(dot reflect.Value, node *IdentifierNode, cmd Node, 
 	// text/template. A user function of either name is an ordinary call,
 	// and one with no arguments falls through to the arg-count error.
 	if name == "and" || name == "or" {
-		if _, overridden := s.funcs[name]; !overridden && (len(args) > 1 || final.IsValid()) {
+		if _, overridden := s.funcs[name]; !overridden && (len(args) > 1 || hasFinal(final)) {
 			return s.evalAndOr(dot, name, args, final)
 		}
 	}
@@ -671,8 +674,10 @@ func (s *state) evalAndOr(dot reflect.Value, name string, args []Node, final ref
 			return result, nil
 		}
 	}
-	if final.IsValid() && decided(final) {
-		return result, nil
+	if hasFinal(final) {
+		// Nothing decided it earlier, so the piped value is the result,
+		// whatever its truth.
+		result = final
 	}
 	return result, nil
 }
@@ -716,7 +721,7 @@ func (s *state) evalField(dot reflect.Value, fieldName string, node Node, args [
 	if receiver.Kind() == reflect.Interface && isNil {
 		return missingVal, s.errorf("nil pointer evaluating %s.%s", typ, fieldName)
 	}
-	hasArgs := len(args) > 1 || final.IsValid()
+	hasArgs := len(args) > 1 || hasFinal(final)
 
 	// Try methods first (on the pointer receiver too).
 	ptr := receiver
@@ -806,7 +811,7 @@ func (s *state) evalCall(dot reflect.Value, fun reflect.Value, node Node, name s
 	typ := fun.Type()
 	numIn := typ.NumIn()
 	numFixed := len(args) - 1 // first arg is the function name itself
-	if final.IsValid() {
+	if hasFinal(final) {
 		numFixed++
 	}
 	// For non-variadic, numFixed must equal numIn.
@@ -845,7 +850,7 @@ func (s *state) evalCall(dot reflect.Value, fun reflect.Value, node Node, name s
 		argv = append(argv, arg)
 	}
 	// Add the piped (final) argument.
-	if final.IsValid() {
+	if hasFinal(final) {
 		var paramType reflect.Type
 		idx := len(argv)
 		if !typ.IsVariadic() || idx < numIn-1 {
@@ -890,15 +895,15 @@ func (s *state) evalArg(dot reflect.Value, typ reflect.Type, n Node) (reflect.Va
 		return reflect.ValueOf(nil), nil
 	case *FieldNode:
 		// zeroArgSentinel, not nil: see evalFieldChain.
-		return s.evalFieldNode(dot, arg, zeroArgSentinel, missingVal)
+		return s.evalFieldNode(dot, arg, zeroArgSentinel, noFinal)
 	case *VariableNode:
-		return s.evalVariableNode(dot, arg, zeroArgSentinel, missingVal)
+		return s.evalVariableNode(dot, arg, zeroArgSentinel, noFinal)
 	case *PipeNode:
 		return s.evalPipeline(dot, arg)
 	case *IdentifierNode:
-		return s.evalFunction(dot, arg, arg, []Node{arg}, missingVal)
+		return s.evalFunction(dot, arg, arg, []Node{arg}, noFinal)
 	case *ChainNode:
-		return s.evalChainNode(dot, arg, zeroArgSentinel, missingVal)
+		return s.evalChainNode(dot, arg, zeroArgSentinel, noFinal)
 	case *BoolNode:
 		return s.evalBoolArg(typ, arg)
 	case *NumberNode:
@@ -1378,11 +1383,7 @@ func (s *state) evalHTMLAttrValueNodes(dot reflect.Value, nodes []Node, quote by
 				return err
 			}
 			s.at(vn)
-			if !value.IsValid() {
-				val.WriteString("<no value>")
-				raw.WriteString(escapeAttrText("<no value>", quote))
-				continue
-			}
+			value = nilForNoValue(value)
 			text, trust, err := s.htmlActionText(value)
 			if err != nil {
 				return err
@@ -1421,12 +1422,7 @@ func (s *state) walkHTMLAction(dot reflect.Value, action *ActionNode) ([]*html.N
 	if at := s.tagAt(); at != nil && at.part != tagNone {
 		return s.walkHTMLTagAction(val, at)
 	}
-	if !val.IsValid() {
-		return []*html.Node{{
-			Type: html.TextNode,
-			Data: "<no value>",
-		}}, nil
-	}
+	val = nilForNoValue(val)
 	inScript := action.HTMLContext != nil && action.HTMLContext.State == "text" && action.HTMLContext.Element == "script"
 	if val.Kind() == reflect.Interface && val.IsNil() && !inScript {
 		// html/template skips a nil interface.
@@ -1900,10 +1896,15 @@ func (s *state) validateArg(paramType reflect.Type, arg reflect.Value) (reflect.
 		return reflect.ValueOf(arg), nil
 	}
 	if !arg.IsValid() {
-		if paramType != nil && canBeNil(paramType) {
+		// No value, such as a missing map entry: a nil of the parameter's
+		// type where it has one, as in text/template's validateType.
+		if paramType == nil {
+			return arg, nil
+		}
+		if canBeNil(paramType) {
 			return reflect.Zero(paramType), nil
 		}
-		return arg, nil
+		return missingVal, s.errorf("invalid value; expected %s", paramType)
 	}
 	if arg.Kind() == reflect.Interface && !arg.IsNil() {
 		arg = arg.Elem()
@@ -1923,8 +1924,34 @@ func (s *state) validateArg(paramType reflect.Type, arg reflect.Value) (reflect.
 	return arg, nil
 }
 
-// missingVal is the zero reflect.Value used to signal "missing".
+// missingVal is the zero reflect.Value: no value, as a missing map entry or
+// a nil interface gives.
 var missingVal reflect.Value
+
+// nilForNoValue returns a nil interface for no value, and v otherwise. A
+// missing map entry or a nil interface reaches html/template's escapers as
+// a nil argument, and they write nothing for it in text and null in a
+// script.
+func nilForNoValue(v reflect.Value) reflect.Value {
+	if v.IsValid() {
+		return v
+	}
+	return reflect.Zero(reflect.TypeFor[any]())
+}
+
+// noFinal is the final argument of a command that has none: the first
+// command of a pipeline, or a word evaluated as an argument. It is not the
+// zero Value, because a piped value can be no value and is an argument all
+// the same. text/template calls it missingVal.
+var noFinal = reflect.ValueOf(noFinalType{})
+
+type noFinalType struct{}
+
+// hasFinal reports whether final is a piped argument, which it is unless
+// it is noFinal.
+func hasFinal(final reflect.Value) bool {
+	return !final.IsValid() || final.Type() != reflect.TypeFor[noFinalType]()
+}
 
 // Sentinel errors for break/continue in range loops.
 type (
