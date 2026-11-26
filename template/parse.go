@@ -38,9 +38,16 @@ func parseFiles(t *Template, readFile func(string) (string, string, []byte, erro
 			return nil, err
 		}
 		s := string(b)
+		// As in html/template: the first file names the result when there
+		// is none, and a file with the result's name becomes its contents,
+		// so that New(name).Funcs(f).ParseFiles(name) works. What the
+		// result already defines stays in the set. Any other file is a new
+		// template of the set.
 		var tmpl *Template
 		if t == nil {
 			t = New(name)
+		}
+		if name == t.Name() {
 			tmpl = t
 		} else {
 			tmpl = t.New(name)
@@ -50,9 +57,10 @@ func parseFiles(t *Template, readFile func(string) (string, string, []byte, erro
 			return nil, err
 		}
 		if fullPath != "" {
-			tmpl.Tree.Filepath = fullPath
+			// The trees this file made have its name and no path yet. A
+			// tree an earlier file of the same name made keeps its own.
 			for _, tr := range t.common.tmpl {
-				if tr.Tree != nil && tr.Tree.Filepath == "" && tr.Tree.ParseName == tmpl.Tree.ParseName {
+				if tr.Tree != nil && tr.Tree.Filepath == "" && tr.Tree.ParseName == name {
 					tr.Tree.Filepath = fullPath
 				}
 			}
